@@ -8,6 +8,7 @@ import type { BreathingController } from "./BreathingController";
 import type { LookAtController } from "./LookAtController";
 import type { LipSyncController } from "./LipSyncController";
 import type { EmotionController } from "./EmotionController";
+import type { PoseController } from "./PoseController";
 
 export type AvatarControllers = {
   animation: AnimationController;
@@ -16,6 +17,7 @@ export type AvatarControllers = {
   lookAt: LookAtController;
   lipSync: LipSyncController;
   emotion: EmotionController;
+  pose: PoseController;
 };
 
 export type AvatarContextValue = {
