@@ -4,16 +4,20 @@ import { useControls } from "leva";
 import * as THREE from "three";
 
 import { loadAvatar } from "./AvatarLoader";
+
 import { AnimationController } from "./AnimationController";
 import { BlinkController } from "./BlinkController";
 import { BreathingController } from "./BreathingController";
 import { LookAtController } from "./LookAtController";
 import { LipSyncController } from "./LipSyncController";
 import { EmotionController } from "./EmotionController";
+import { PoseController } from "./PoseController";
+
 import {
   AvatarContext,
   type AvatarContextValue,
 } from "./AvatarContext";
+
 import {
   ANIMATIONS,
   DEFAULT_VRM_URL,
@@ -26,47 +30,117 @@ export default function Character() {
   const [avatar, setAvatar] =
     useState<AvatarContextValue | null>(null);
 
-  const lookAtTarget = useRef(new THREE.Vector3());
+    const pose = useControls("Pose", {
+      armX: {
+        value: 5,
+        min: -90,
+        max: 90,
+        step: 1,
+      },
+    
+      armY: {
+        value: 8,
+        min: -90,
+        max: 90,
+        step: 1,
+      },
+    
+      armZ: {
+        value: 72,
+        min: -90,
+        max: 90,
+        step: 1,
+      },
+    });
+
+  const cameraTarget = useRef(
+    new THREE.Vector3()
+  );
+
+  //
+  // Leva
+  //
 
   const animationOptions = [
     "None",
     ...Object.keys(ANIMATIONS),
   ] as const;
 
-  const { animation } = useControls("Animation", {
-    animation: {
-      value: "None",
-      options: animationOptions,
-    },
-  });
+  const { animation } = useControls(
+    "Animation",
+    {
+      animation: {
+        value: "None",
+        options: animationOptions,
+      },
+    }
+  );
 
-  const { emotion } = useControls("Emotion", {
-    emotion: {
-      value: "Neutral" satisfies EmotionName,
-      options: Object.keys(EMOTIONS),
-    },
-  });
+  const { emotion } = useControls(
+    "Emotion",
+    {
+      emotion: {
+        value: "Neutral" satisfies EmotionName,
+        options: Object.keys(EMOTIONS),
+      },
+    }
+  );
+
+  //
+  // Load Avatar
+  //
 
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
-      const { vrm, mixer } = await loadAvatar(
-        DEFAULT_VRM_URL
-      );
+      const { vrm, mixer } =
+        await loadAvatar(DEFAULT_VRM_URL);
 
       if (cancelled) return;
 
+      //
+      // Default Pose
+      //
+
+      const pose = new PoseController(vrm);
+
+      pose.relaxed();
+
+      //
+      // Controllers
+      //
+
       const controllers = {
-        animation: new AnimationController(vrm, mixer),
+        pose,
+
+        animation:
+          new AnimationController(
+            vrm,
+            mixer,
+            pose
+          ),
+
         blink: new BlinkController(),
-        breathing: new BreathingController(),
-        lookAt: new LookAtController(),
-        lipSync: new LipSyncController(),
-        emotion: new EmotionController(),
+
+        breathing:
+          new BreathingController(),
+
+        lookAt:
+          new LookAtController(),
+
+        lipSync:
+          new LipSyncController(),
+
+        emotion:
+          new EmotionController(),
       };
 
-      setAvatar({ vrm, mixer, controllers });
+      setAvatar({
+        vrm,
+        mixer,
+        controllers,
+      });
     }
 
     init();
@@ -76,54 +150,119 @@ export default function Character() {
     };
   }, []);
 
+  //
+  // Emotion
+  //
+
   useEffect(() => {
     if (!avatar) return;
 
     avatar.controllers.emotion.setEmotion(
       emotion as EmotionName
     );
-  }, [emotion, avatar]);
+  }, [avatar, emotion]);
+
+  //
+  // Animation
+  //
 
   useEffect(() => {
     if (!avatar) return;
 
-    const { animation: animCtrl } = avatar.controllers;
-
     if (animation === "None") {
-      animCtrl.stop();
+      avatar.controllers.animation.stop();
+
       return;
     }
 
-    animCtrl.play(animation as AnimationName);
-  }, [animation, avatar]);
+    avatar.controllers.animation.play(
+      animation as AnimationName
+    );
+  }, [avatar, animation]);
+
+  //
+  // Frame Loop
+  //
 
   useFrame((state, delta) => {
     if (!avatar) return;
 
-    const { vrm, controllers } = avatar;
+    const {
+      vrm,
+      controllers,
+    } = avatar;
+
+    //
+    // Body
+    //
 
     controllers.animation.update(delta);
-    controllers.blink.update(delta, vrm);
-    controllers.breathing.update(delta, vrm);
-    controllers.emotion.update(delta, vrm);
+
+    //
+    // Face
+    //
+
+    controllers.blink.update(
+      delta,
+      vrm
+    );
+
+    controllers.emotion.update(
+      delta,
+      vrm
+    );
+
     controllers.lipSync.update(vrm);
 
-    lookAtTarget.current.setFromMatrixPosition(
+    //
+    // Idle
+    //
+
+    controllers.breathing.update(
+      delta,
+      vrm
+    );
+
+    //
+    // LookAt
+    //
+
+    cameraTarget.current.setFromMatrixPosition(
       state.camera.matrixWorld
     );
-    controllers.lookAt.setTarget(lookAtTarget.current);
+
+    controllers.lookAt.setTarget(
+      cameraTarget.current
+    );
+
     controllers.lookAt.update(vrm);
 
+    //
+    // Update VRM
+    //
+
     vrm.update(delta);
+
+    //
+    // Pose 
+    //
+    if (!controllers.animation.isPlaying()) {
+      controllers.pose.relaxed(
+        pose.armX,
+        pose.armY,
+        pose.armZ
+      );
+    }
   });
 
   if (!avatar) return null;
 
   return (
-    <AvatarContext.Provider value={avatar}>
+    <AvatarContext.Provider
+      value={avatar}
+    >
       <primitive
         object={avatar.vrm.scene}
-        position={[0, 0, 0]}
       />
     </AvatarContext.Provider>
   );

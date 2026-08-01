@@ -4,6 +4,7 @@ import {
   GLTFLoader,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRM, VRMLoaderPlugin } from "@pixiv/three-vrm";
+import { DefaultPoseController } from "./DefaultPoseController";
 
 export type LoadedAvatar = {
   vrm: VRM;
@@ -24,6 +25,8 @@ export async function loadAvatar(
 
   vrm.scene.rotation.y = Math.PI;
   vrm.scene.position.set(0, 0, 0);
+  
+  new DefaultPoseController().apply(vrm);
 
   const mixer = new THREE.AnimationMixer(vrm.scene);
 

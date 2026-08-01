@@ -6,7 +6,7 @@ model = WhisperModel("medium", device="cpu", compute_type="int8")
 
 SAMPLE_RATE = 16000
 BLOCK_DURATION = 0.02        # 20 ms (better responsiveness)
-SILENCE_HANG_TIME = 0.8      # Stop after 0.8 s of silence
+SILENCE_HANG_TIME = 1.5      # Stop after 0.8 s of silence
 MAX_RECORD_SECONDS = 15      # Voice commands rarely exceed this
 CALIBRATION_SECONDS = 1.0    # Better ambient noise estimation
 THRESHOLD_MULTIPLIER = 2.5   # Less likely to trigger on background noise
