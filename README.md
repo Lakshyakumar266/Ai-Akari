@@ -61,4 +61,6 @@ uv run src/main.py
 
 ## License
 
-See repository metadata and third-party licenses for Mistral, Fish Audio, faster-whisper, mpv, and @pixiv/three-vrm.
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. See [LICENSE](LICENSE) for the full text.
+
+Third-party components (Mistral, Fish Audio, faster-whisper, mpv, @pixiv/three-vrm) are licensed separately under their own terms.
