@@ -27,6 +27,7 @@ export interface TranscriptEvent {
 }
 
 export interface SpeechEvent {
+  delay_ms: number;
   type: "speech";
   timeline: SpeechTimeline;
 }
