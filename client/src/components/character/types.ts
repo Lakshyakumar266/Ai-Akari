@@ -1,4 +1,5 @@
 export const ANIMATIONS = {
+  Idle: "/animations/Idle.vrma",
   Blush: "/animations/Blush.vrma",
   Clapping: "/animations/Clapping.vrma",
   Jump: "/animations/Jump.vrma",

@@ -49,7 +49,7 @@ Requires **Python 3.11+**, [uv](https://docs.astral.sh/uv/), a microphone, speak
 cd server
 uv sync
 # create .env from .env.example with your Mistral + Fish Audio keys
-uv run src/main.py
+uv run python -m src.main
 ```
 
 ## Features

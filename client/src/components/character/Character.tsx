@@ -25,6 +25,7 @@ import {
   type AnimationName,
   type EmotionName,
 } from "./types";
+import { avatarEvents } from "../../networking";
 
 export default function Character() {
   const [avatar, setAvatar] =
@@ -212,7 +213,7 @@ export default function Character() {
       vrm
     );
 
-    controllers.lipSync.update(vrm);
+    controllers.lipSync.update(delta,vrm);
 
     //
     // Idle
@@ -254,6 +255,22 @@ export default function Character() {
       );
     }
   });
+
+  useEffect(() => {
+    if (!avatar) return;
+  
+    const unsubscribe =
+      avatarEvents.subscribe(
+        "speech",
+        (event) => {
+          avatar.controllers.lipSync.playTimeline(
+            event.timeline
+          );
+        }
+      );
+  
+    return unsubscribe;
+  }, [avatar]);
 
   if (!avatar) return null;
 

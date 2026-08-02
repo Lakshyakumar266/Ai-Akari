@@ -1,0 +1,69 @@
+export type Viseme =
+  | "aa"
+  | "ih"
+  | "ou"
+  | "ee"
+  | "oh"
+  | "sil";
+
+export interface VisemeFrame {
+  t: number;
+  viseme: Viseme;
+  weight: number;
+}
+
+export interface SpeechTimeline {
+  id: string;
+  created_at: number;
+  start_at: number;
+  text: string;
+  duration: number;
+  frames: VisemeFrame[];
+}
+
+export interface TranscriptEvent {
+  type: "transcript";
+  text: string;
+}
+
+export interface SpeechEvent {
+  type: "speech";
+  timeline: SpeechTimeline;
+}
+
+
+export interface EmotionEvent {
+  type: "emotion";
+  emotion: string;
+}
+
+export interface AnimationEvent {
+  type: "animation";
+  animation: string;
+}
+
+export interface ThinkingStartEvent {
+  type: "thinking_start";
+}
+
+export interface ThinkingEndEvent {
+  type: "thinking_end";
+}
+
+export interface SpeechStartEvent {
+  type: "speech_start";
+}
+
+export interface SpeechEndEvent {
+  type: "speech_end";
+}
+
+export type AvatarEvent =
+  | TranscriptEvent
+  | SpeechEvent
+  | EmotionEvent
+  | AnimationEvent
+  | ThinkingStartEvent
+  | ThinkingEndEvent
+  | SpeechStartEvent
+  | SpeechEndEvent;

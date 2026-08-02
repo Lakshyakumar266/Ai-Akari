@@ -1,54 +1,147 @@
 import type { VRM } from "@pixiv/three-vrm";
 
-import {
-  VISEME_EXPRESSIONS,
-  type VisemeName,
-} from "./types";
+import type {
+  SpeechTimeline,
+} from "../../networking/types";
+
+import { TimelinePlayer } from "./TimelinePlayer";
+import { TimelineQueue } from "./TimelineQueue";
+import type { VisemeName } from "./types";
+
+const VISEMES: VisemeName[] = [
+  "aa",
+  "ih",
+  "ou",
+  "ee",
+  "oh",
+];
 
 export class LipSyncController {
-  private weights: Record<VisemeName, number> = {
-    aa: 0,
-    ih: 0,
-    ou: 0,
-    ee: 0,
-    oh: 0,
-  };
+  private readonly queue =
+    new TimelineQueue();
 
-  private enabled = false;
+  private readonly player =
+    new TimelinePlayer();
 
-  setEnabled(enabled: boolean) {
-    this.enabled = enabled;
-    if (!enabled) {
-      this.reset();
+  playTimeline(
+    timeline: SpeechTimeline
+  ) {
+    this.queue.enqueue(timeline);
+  }
+
+  stop(vrm?: VRM) {
+    this.queue.clear();
+
+    this.player.stop();
+
+    if (vrm) {
+      this.resetExpressions(vrm);
     }
   }
 
-  setViseme(name: VisemeName, weight: number) {
-    if (!(name in this.weights)) return;
-    this.weights[name] = Math.max(0, Math.min(1, weight));
+  isSpeaking() {
+    return (
+      this.player.active ||
+      !this.queue.empty
+    );
   }
 
-  /** Drive visemes from a single loudness value (0–1). */
-  setFromVolume(volume: number) {
-    const v = Math.max(0, Math.min(1, volume));
-    this.setViseme("aa", v * 0.85);
-    this.setViseme("oh", v * 0.35);
-  }
+  update(
+    delta: number,
+    vrm: VRM
+  ) {
+    //
+    // Start next sentence automatically
+    //
+    if (
+      !this.player.active &&
+      !this.queue.empty
+    ) {
+      const next =
+        this.queue.dequeue();
 
-  reset() {
-    for (const key of VISEME_EXPRESSIONS) {
-      this.weights[key] = 0;
+      if (next) {
+        this.player.play(next);
+      }
+    }
+
+    //
+    // Nothing playing
+    //
+    if (!this.player.active) {
+      this.resetExpressions(vrm);
+      return;
+    }
+
+    //
+    // Advance timeline
+    //
+    const state = this.player.update(delta);
+
+    //
+    // Timeline finished
+    //
+    if (!state) {
+      this.resetExpressions(vrm);
+      return;
+    }
+
+    //
+    // Reset all mouth shapes
+    //
+    
+    this.resetExpressions(vrm);
+    const manager =
+      vrm.expressionManager;
+
+    if (!manager)
+      return;
+
+    const {
+      current,
+      next,
+      alpha,
+    } = state;
+
+    //
+    // current
+    //
+
+    if (
+      current.viseme !== "sil"
+    ) {
+      manager.setValue(
+        current.viseme,
+        current.weight *
+        (1 - alpha)
+      );
+    }
+
+    //
+    // next
+    //
+
+    if (
+      next &&
+      next.viseme !== "sil"
+    ) {
+      manager.setValue(
+        next.viseme,
+        next.weight * alpha
+      );
     }
   }
 
-  update(vrm: VRM) {
-    if (!this.enabled) return;
+  private resetExpressions(
+    vrm: VRM
+  ) {
+    const manager =
+      vrm.expressionManager;
 
-    const manager = vrm.expressionManager;
     if (!manager) return;
 
-    for (const name of VISEME_EXPRESSIONS) {
-      manager.setValue(name, this.weights[name]);
+    for (const viseme of VISEMES) {
+      manager.setValue(viseme, 0);
     }
   }
 }
