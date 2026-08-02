@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from mistralai.client import Mistral
 from mistralai.client.models import UserMessage, SystemMessage
-from prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
 
 load_dotenv()
 
