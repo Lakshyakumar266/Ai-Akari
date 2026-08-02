@@ -68,18 +68,10 @@ import type {
           this.currentIndex + 1
         ] ?? null;
   
-      if (
-        this.elapsed >=
-        this.timeline.duration
-      ) {
-        this.stop();
-  
-        return {
-          current,
-          next: null,
-          alpha: 1,
-        };
-      }
+        if (this.elapsed >= this.timeline.duration) {
+            this.stop();
+            return null;
+        }
   
       let alpha = 1;
   

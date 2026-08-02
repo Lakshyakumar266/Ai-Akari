@@ -44,8 +44,16 @@ class AvatarSocket {
             performance.now().toFixed(3),
             event
           );
+        
+          const delay = event.delay_ms ?? 0;
+        
+          window.setTimeout(() => {
+            avatarEvents.emit(event);
+          }, delay);
+        
+          return;
         }
-
+        
         avatarEvents.emit(event);
       } catch (err) {
         console.error(
