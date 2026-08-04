@@ -23,10 +23,19 @@ export class LipSyncController {
   private readonly player =
     new TimelinePlayer();
 
+  /**
+   * Enqueue a speech timeline for playback.
+   *
+   * @param timeline  Viseme frames from the server.
+   * @param startAt   AudioContext.currentTime when this sentence's audio plays.
+   *                  TimelinePlayer computes elapsed = audioPlayer.currentTime - startAt
+   *                  so visemes stay locked to the actual audio sample clock.
+   */
   playTimeline(
-    timeline: SpeechTimeline
+    timeline: SpeechTimeline,
+    startAt: number,
   ) {
-    this.queue.enqueue(timeline);
+    this.queue.enqueue(timeline, startAt);
   }
 
   stop(vrm?: VRM) {
@@ -51,17 +60,18 @@ export class LipSyncController {
     vrm: VRM
   ) {
     //
-    // Start next sentence automatically
+    // Start next sentence automatically.
+    // The queue entry carries its own startAt so TimelinePlayer knows
+    // when to begin relative to the audio clock.
     //
     if (
       !this.player.active &&
       !this.queue.empty
     ) {
-      const next =
-        this.queue.dequeue();
+      const next = this.queue.dequeue();
 
       if (next) {
-        this.player.play(next);
+        this.player.play(next.timeline, next.startAt);
       }
     }
 
@@ -74,7 +84,7 @@ export class LipSyncController {
     }
 
     //
-    // Advance timeline
+    // Advance timeline (delta is passed but TimelinePlayer uses AudioContext clock)
     //
     const state = this.player.update(delta);
 
@@ -89,13 +99,12 @@ export class LipSyncController {
     //
     // Reset all mouth shapes
     //
-    
+
     this.resetExpressions(vrm);
     const manager =
       vrm.expressionManager;
 
-    if (!manager)
-      return;
+    if (!manager) return;
 
     const {
       current,
@@ -107,13 +116,10 @@ export class LipSyncController {
     // current
     //
 
-    if (
-      current.viseme !== "sil"
-    ) {
+    if (current.viseme !== "sil") {
       manager.setValue(
         current.viseme,
-        current.weight *
-        (1 - alpha)
+        current.weight * (1 - alpha)
       );
     }
 

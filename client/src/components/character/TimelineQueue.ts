@@ -1,13 +1,19 @@
 import type { SpeechTimeline } from "../../networking/types";
 
-export class TimelineQueue {
-  private queue: SpeechTimeline[] = [];
+interface QueueEntry {
+  timeline: SpeechTimeline;
+  /** AudioContext.currentTime when this timeline's audio starts playing. */
+  startAt: number;
+}
 
-  enqueue(timeline: SpeechTimeline) {
-    this.queue.push(timeline);
+export class TimelineQueue {
+  private queue: QueueEntry[] = [];
+
+  enqueue(timeline: SpeechTimeline, startAt: number) {
+    this.queue.push({ timeline, startAt });
   }
 
-  dequeue(): SpeechTimeline | null {
+  dequeue(): QueueEntry | null {
     if (this.queue.length === 0) {
       return null;
     }
@@ -15,7 +21,7 @@ export class TimelineQueue {
     return this.queue.shift() ?? null;
   }
 
-  peek(): SpeechTimeline | null {
+  peek(): QueueEntry | null {
     return this.queue[0] ?? null;
   }
 

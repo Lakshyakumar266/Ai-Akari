@@ -30,6 +30,13 @@ export interface SpeechEvent {
   delay_ms: number;
   type: "speech";
   timeline: SpeechTimeline;
+  /**
+   * AudioContext.currentTime (seconds) when this sentence's audio
+   * is scheduled to start playing. Set by AvatarSocket from its
+   * lipsync cursor — mirrors AudioPlayer._nextStartTime exactly.
+   * TimelinePlayer uses this instead of delta accumulation.
+   */
+  scheduledAt: number;
 }
 
 

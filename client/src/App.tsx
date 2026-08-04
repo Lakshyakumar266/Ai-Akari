@@ -3,9 +3,31 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Scene from "./components/scene";
 import { Leva } from "leva";
+import { audioPlayer } from "./audio/AudioPlayer";
+import { useEffect } from "react";
 
 
 export default function App() {
+  
+  useEffect(() => {
+    const unlock = () => {
+
+      audioPlayer.resume();
+
+      window.removeEventListener(
+        "pointerdown",
+        unlock
+      );
+
+    };
+
+    window.addEventListener(
+      "pointerdown",
+      unlock,
+    );
+
+  }, []);
+
   return (
     <>
       <Leva collapsed={false} />
