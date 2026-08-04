@@ -7,6 +7,7 @@
 
 import type { PCMPlayer } from "./PCMPlayer";
 
+
 export class PCMQueue {
   private readonly player: PCMPlayer;
   private queue: ArrayBuffer[] = [];
