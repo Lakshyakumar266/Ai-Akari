@@ -30,7 +30,7 @@ def stream_audio(text_chunks):
         text_chunks,
         reference_id=REFERENCE_ID,
         model=TTS_MODEL,
-        format="mp3",
+        format="pcm",
         latency="balanced",
     )
     print("[TTS] Streaming audio chunks to browser...")

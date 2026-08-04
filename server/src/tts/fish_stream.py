@@ -51,7 +51,7 @@ class FishStream:
                 # decodeAudioData handles opus natively in all browsers.
                 # wav in streaming mode sends raw PCM bytes (no header),
                 # which decodeAudioData cannot decode.
-                "format": "mp3",
+                "format": "pcm",
                 "latency": "balanced",
             },
         )
