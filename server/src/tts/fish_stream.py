@@ -47,7 +47,11 @@ class FishStream:
                 "text": text,
                 "reference_id":
                     REFERENCE_ID,
-                "format": "wav",
+                # opus: each SSE chunk is a self-contained Opus packet.
+                # decodeAudioData handles opus natively in all browsers.
+                # wav in streaming mode sends raw PCM bytes (no header),
+                # which decodeAudioData cannot decode.
+                "format": "mp3",
                 "latency": "balanced",
             },
         )

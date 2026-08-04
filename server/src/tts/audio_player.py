@@ -1,20 +1,7 @@
 from __future__ import annotations
 
-import os
-import subprocess
-
-from .alignment_tracker import AlignmentTracker
-from .timeline_accumulator import TimelineAccumulator
-
-
-MPV_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "..",
-    "bin",
-    "mpv-windows",
-    "mpv.exe",
-)
+from src.bridge.audio import audio_chunk, audio_end
+from src.bridge.dispatcher import dispatch
 
 
 class AudioPlayer:
@@ -23,53 +10,34 @@ class AudioPlayer:
 
     Responsibilities:
 
-        • Play audio immediately
-        • Track new alignments
-        • Build timelines
-        • Dispatch speech events
+        • Forward audio chunks as binary WebSocket packets to the browser
+        • Yield each chunk so TimelineDispatcher can process alignment data
+
+    MPV has been removed. The browser is now the audio output.
     """
-
-    def __init__(self):
-
-        self.tracker = AlignmentTracker()
-
-        self.timeline = TimelineAccumulator()
 
     def play(
         self,
         stream,
     ):
-
-        proc = subprocess.Popen(
-            [
-                MPV_PATH,
-                "--no-terminal",
-                "--no-cache",
-                "-",
-            ],
-            stdin=subprocess.PIPE,
-        )
-
         try:
-
             for chunk in stream:
                 print(
                     "[AudioPlayer]",
                     len(chunk.audio),
+                    "bytes",
                 )
 
                 if chunk.audio:
-
-                    proc.stdin.write(
-                        chunk.audio
+                    dispatch(
+                        audio_chunk(
+                            chunk.audio
+                        )
                     )
-
-                    proc.stdin.flush()
 
                 yield chunk
 
         finally:
-
-            proc.stdin.close()
-
-            proc.wait()
+            dispatch(
+                audio_end()
+            )
