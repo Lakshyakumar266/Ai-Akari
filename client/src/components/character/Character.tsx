@@ -264,7 +264,8 @@ export default function Character() {
         "speech",
         (event) => {
           avatar.controllers.lipSync.playTimeline(
-            event.timeline
+            event.timeline,
+            event.scheduledAt,
           );
         }
       );
