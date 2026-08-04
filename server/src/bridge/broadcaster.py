@@ -68,6 +68,7 @@ class Broadcaster:
             except Exception:
                 dead_clients.append(client)
 
+    
         #
         # Remove dead sockets
         #
@@ -77,6 +78,33 @@ class Broadcaster:
                 for client in dead_clients:
                     self._clients.discard(client)
 
+    async def broadcast_binary(self,payload: bytes,):
+        """
+        Broadcast raw binary data.
+        """
+
+        if not self._clients:
+            return
+
+        dead_clients = []
+
+        clients = list(self._clients)
+
+        for client in clients:
+
+            try:
+                await client.send(payload)
+
+            except Exception:
+                dead_clients.append(client)
+
+        if dead_clients:
+
+            async with self._lock:
+
+                for client in dead_clients:
+                    self._clients.discard(client)
+                
     #
     # Convenience
     #
