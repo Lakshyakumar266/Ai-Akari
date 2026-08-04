@@ -1,155 +1,139 @@
 /**
  * AudioPlayer
  *
- * Decodes and schedules audio chunks for gapless playback using the Web Audio API.
+ * Web Audio API engine. Maintains the permanent audio graph:
+ *   AudioBufferSourceNode -> GainNode -> AnalyserNode -> Destination
  *
- * Design:
- *   - A single AudioContext is the source of truth for time.
- *   - Each incoming chunk is decoded, then scheduled to start precisely
- *     when the previous chunk ends (_nextStartTime).
- *   - Sample rate is NOT hardcoded — the AudioContext uses its default
- *     (auto-matched by the OS) and WAV headers are decoded natively by
- *     decodeAudioData, which handles any sample rate automatically.
- *   - stop() clears the schedule so an interrupt takes effect immediately.
+ * Implements an exact AudioContext time scheduler:
+ *   startTime = Math.max(nextPlaybackTime, currentTime + 0.02)
+ *   source.start(startTime)
+ *   nextPlaybackTime = startTime + buffer.duration
  */
 
 export class AudioPlayer {
   private readonly context: AudioContext;
+  private readonly _gain: GainNode;
+  private readonly _analyser: AnalyserNode;
 
-  /**
-   * AudioContext time (seconds) at which the next buffered chunk should start.
-   * Advances by each decoded buffer's duration.
-   */
-  private _nextStartTime = 0;
-
-  /**
-   * All currently active BufferSource nodes.
-   * Tracked so stop() can disconnect them all.
-   */
-  private _activeSources: AudioBufferSourceNode[] = [];
+  private nextPlaybackTime = 0;
+  private activeSources: AudioBufferSourceNode[] = [];
+  private logCount = 0;
 
   constructor() {
-    this.context = new AudioContext({
-      // "playback" prioritises low-latency-accurate scheduling over
-      // interactive latency — best for streaming audio queues.
-      latencyHint: "playback",
-    });
+    this.context = new AudioContext({ latencyHint: "interactive" });
+
+    this._gain = this.context.createGain();
+    this._analyser = this.context.createAnalyser();
+    this._analyser.fftSize = 2048;
+    this._analyser.smoothingTimeConstant = 0;
+
+    // Connect graph: gain -> analyser -> destination
+    this._gain.connect(this._analyser);
+    this._analyser.connect(this.context.destination);
+
+    console.log(`[AudioPlayer] Initialized AudioContext at ${this.context.sampleRate} Hz`);
   }
 
-  // ---------------------------------------------------------------------------
-  // Public API
-  // ---------------------------------------------------------------------------
-
   /**
-   * Decode one audio chunk and schedule it to play
-   * immediately after the previous chunk ends.
-   *
-   * Returns a Promise that resolves when the chunk has been *scheduled*
-   * (not when it finishes playing). AudioQueue chains these promises to
-   * prevent race conditions when chunks arrive faster than decode speed.
+   * Schedule an AudioBuffer for continuous playback.
    */
-  async play(audio: ArrayBuffer): Promise<void> {
-    // Resume context if browser suspended it (autoplay policy).
-    await this._ensureRunning();
+  scheduleBuffer(buffer: AudioBuffer): void {
+    this.ensureRunning();
 
-    let buffer: AudioBuffer;
+    const now = this.context.currentTime;
 
-    try {
-      buffer = await this.context.decodeAudioData(audio.slice(0));
-    } catch (err) {
-      // If this fires, the audio format is not supported by the browser.
-      // Switch fish_stream.py to "mp3" or "opus" format.
-      console.error("[AudioPlayer] decodeAudioData FAILED — format unsupported?", err);
-      return;
+    // Prevent accumulated drift if playback underran or queue was empty
+    if (now > this.nextPlaybackTime) {
+      this.nextPlaybackTime = now;
     }
+
+    const startTime = Math.max(
+      this.nextPlaybackTime,
+      now + 0.02
+    );
 
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.context.destination);
+    source.connect(this._gain);
 
-    // Schedule: clamp to "now + tiny lookahead" to avoid scheduling in the past.
-    const startAt = Math.max(
-      this.context.currentTime + 0.05,
-      this._nextStartTime,
-    );
+    source.start(startTime);
+    this.nextPlaybackTime = startTime + buffer.duration;
 
-    source.start(startAt);
-
-    // Advance the cursor by exactly one buffer duration for gapless continuity.
-    this._nextStartTime = startAt + buffer.duration;
-
-    // Track source so stop() can clean up.
-    this._activeSources.push(source);
+    this.activeSources.push(source);
 
     source.onended = () => {
-      this._activeSources = this._activeSources.filter((s) => s !== source);
+      this.activeSources = this.activeSources.filter((s) => s !== source);
+      source.disconnect();
     };
 
-    console.debug(
-      `[AudioPlayer] scheduled +${buffer.duration.toFixed(3)}s @ ${startAt.toFixed(3)} | queue end: ${this._nextStartTime.toFixed(3)}`,
-    );
+    if (this.logCount < 10) {
+      console.log(
+        `[AudioScheduler] buf#${this.logCount} | ` +
+        `dur=${buffer.duration.toFixed(3)}s | ` +
+        `start=${startTime.toFixed(3)}s | ` +
+        `next=${this.nextPlaybackTime.toFixed(3)}s | ` +
+        `now=${now.toFixed(3)}s | ` +
+        `bufSampleRate=${buffer.sampleRate} (ctxSampleRate=${this.context.sampleRate})`
+      );
+      this.logCount++;
+    }
   }
 
   /**
-   * Immediately stop all queued / playing audio and reset the schedule.
-   * Call this when an INTERRUPT packet arrives.
+   * Decode raw ArrayBuffer into AudioBuffer using AudioContext.
    */
-  stop() {
-    for (const source of this._activeSources) {
+  async decodeAudio(data: ArrayBuffer): Promise<AudioBuffer | null> {
+    try {
+      return await this.context.decodeAudioData(data.slice(0));
+    } catch (err) {
+      console.error("[AudioPlayer] decodeAudioData failed for chunk:", err);
+      return null;
+    }
+  }
+
+  /**
+   * Stop all playing & scheduled sources immediately.
+   */
+  stop(): void {
+    for (const source of this.activeSources) {
       try {
         source.stop();
         source.disconnect();
       } catch {
-        // Already stopped — ignore.
+        // Ignored
       }
     }
-
-    this._activeSources = [];
-    this._nextStartTime = 0;
-
-    console.log("[AudioPlayer] Stopped — queue cleared");
+    this.activeSources = [];
+    this.nextPlaybackTime = 0;
+    this.logCount = 0;
+    console.log("[AudioPlayer] Stopped all audio playback.");
   }
 
-  /**
-   * Resume a suspended AudioContext.
-   * Must be called inside a user-gesture handler at least once.
-   */
-  async resume() {
-    await this._ensureRunning();
+  async resume(): Promise<void> {
+    this.ensureRunning();
   }
 
-  // ---------------------------------------------------------------------------
-  // Clock exposure
-  // ---------------------------------------------------------------------------
+  private ensureRunning(): void {
+    if (this.context.state === "suspended") {
+      this.context.resume().catch(() => {});
+    }
+  }
 
-  /**
-   * The AudioContext's live clock.
-   * Use this for any timing that must stay in sync with audio playback.
-   */
+  get analyser(): AnalyserNode {
+    return this._analyser;
+  }
+
   get currentTime(): number {
     return this.context.currentTime;
   }
 
-  /**
-   * The AudioContext time (seconds) when the last scheduled chunk ends.
-   *
-   * LipSyncController can use this to know when speech audio will finish,
-   * allowing it to switch from delta-accumulation to AudioContext-clock timing.
-   */
   get scheduledEndTime(): number {
-    return this._nextStartTime;
+    return this.nextPlaybackTime;
   }
 
-  // ---------------------------------------------------------------------------
-  // Internals
-  // ---------------------------------------------------------------------------
-
-  private async _ensureRunning() {
-    if (this.context.state === "suspended") {
-      await this.context.resume();
-    }
+  get sampleRate(): number {
+    return this.context.sampleRate;
   }
 }
 
-// Global singleton — shared by AvatarSocket and LipSyncController.
 export const audioPlayer = new AudioPlayer();

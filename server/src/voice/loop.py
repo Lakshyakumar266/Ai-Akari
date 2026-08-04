@@ -1,6 +1,5 @@
 import asyncio
 import string
-import time
 
 from mistralai.client.models import (
     AssistantMessage,
@@ -14,12 +13,7 @@ from src.asr.voice_to_text import (
 
 from src.bridge.dispatcher import dispatch
 from src.bridge.events import (
-    speech,
     transcript,
-)
-
-from src.lipsync.speech import (
-    build_speech_timeline,
 )
 
 from src.llm.mistral_model import (
@@ -28,10 +22,6 @@ from src.llm.mistral_model import (
 
 from src.prompts.system_prompt_akari import (
     EXIT_PHRASES,
-)
-
-from src.streaming.splitter import (
-    SentenceSplitter,
 )
 
 from src.tts.text_to_speech import (
@@ -90,16 +80,8 @@ async def run_voice_loop():
 
             full_reply: list[str] = []
 
-            splitter = SentenceSplitter()
-
             def text_chunks():
-
-                print(
-                    "Akari: ",
-                    end="",
-                    flush=True,
-                )
-                print("Generator started")
+                print("Akari: ", end="", flush=True)
 
                 for token in stream_chat(
                     user_text,
@@ -118,42 +100,10 @@ async def run_voice_loop():
                     #
                     yield token
 
-                    #
-                    # As soon as a sentence finishes,
-                    # send its viseme timeline.
-                    #
-                    for sentence in splitter.push(token):
-
-                        timeline = build_speech_timeline(
-                            sentence
-                        )
-
-                        print(
-                            f"[SERVER] Dispatch speech @ {time.perf_counter():.3f}"
-                        )
-
-                        dispatch(
-                            speech(timeline)
-                        )
-                print("Generator finished")
-
-                #
-                # Flush remaining text.
-                #
-                for sentence in splitter.flush():
-
-                    timeline = build_speech_timeline(
-                        sentence
-                    )
-
-                    dispatch(
-                        speech(timeline)
-                    )
-
                 print()
 
             #
-            # Start streaming TTS.
+            # Start streaming TTS to browser.
             #
             await asyncio.to_thread(
                 stream_audio,

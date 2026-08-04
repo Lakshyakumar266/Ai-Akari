@@ -1,56 +1,110 @@
 /**
  * AudioQueue
  *
- * Serialises incoming audio chunk decode+schedule calls so they never race.
+ * Decouples network packet receiving from audio decoding & playback scheduling.
  *
- * Problem without this:
- *   Browser receives chunk 1 and chunk 2 almost simultaneously.
- *   Both call audioPlayer.play() concurrently.
- *   decodeAudioData for chunk 2 may finish before chunk 1.
- *   Chunk 2 gets scheduled first → wrong order → overlap/gap.
- *
- * Solution:
- *   Each push() appends to a promise chain.
- *   Chunk N+1 only starts decoding after chunk N has been scheduled.
- *   Order is guaranteed regardless of chunk size or decode speed.
+ * Pipeline:
+ *   Binary Packet (WebSocket)
+ *           ↓
+ *      rawQueue (ArrayBuffer[])
+ *           ↓
+ *     Decode Loop (decodeAudioData)
+ *           ↓
+ *    decodedQueue (AudioBuffer[])
+ *           ↓
+ *    Playback Scheduler (AudioContext.currentTime)
+ *           ↓
+ *       AudioPlayer
  */
 
 import { audioPlayer, AudioPlayer } from "./AudioPlayer";
 
 export class AudioQueue {
-  private _chain: Promise<void> = Promise.resolve();
-
   private readonly player: AudioPlayer;
+
+  private rawQueue: ArrayBuffer[] = [];
+  private decodedQueue: AudioBuffer[] = [];
+
+  private isDecoding = false;
+  private bufferedDuration = 0;
+  private isStreamingPlayback = false;
+
+  /** Minimum pre-buffer (seconds) required before starting initial playback of a stream */
+  private readonly PRE_BUFFER_TARGET_SEC = 0.15; // 150ms
 
   constructor(player: AudioPlayer) {
     this.player = player;
   }
 
   /**
-   * Enqueue an audio chunk for decode + scheduled playback.
-   * Returns immediately — the chunk plays when its turn arrives.
+   * Enqueue a raw binary audio chunk received over WebSocket.
+   * Does NOT block the network callback.
    */
   push(chunk: ArrayBuffer): void {
-    // Capture the buffer reference now; don't close over a mutable variable.
-    const frozen = chunk;
-
-    this._chain = this._chain
-      .then(() => this.player.play(frozen))
-      .catch((err) => {
-        console.error("[AudioQueue] Chunk error:", err);
-        // Don't break the chain — continue with next chunk.
-      });
+    this.rawQueue.push(chunk);
+    this.processQueue();
   }
 
   /**
-   * Discard all pending chunks and stop playback immediately.
-   * Use when an INTERRUPT packet arrives.
+   * Discard all pending audio & stop playback immediately (e.g. on INTERRUPT).
    */
   flush(): void {
-    // Reset the chain so future pushes aren't waiting on dead promises.
-    this._chain = Promise.resolve();
+    this.rawQueue = [];
+    this.decodedQueue = [];
+    this.bufferedDuration = 0;
+    this.isDecoding = false;
+    this.isStreamingPlayback = false;
 
     this.player.stop();
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isDecoding) return;
+    this.isDecoding = true;
+
+    while (this.rawQueue.length > 0) {
+      const chunk = this.rawQueue.shift();
+      if (!chunk) continue;
+
+      const audioBuffer = await this.player.decodeAudio(chunk);
+      if (audioBuffer) {
+        this.decodedQueue.push(audioBuffer);
+        this.bufferedDuration += audioBuffer.duration;
+      }
+
+      this.schedulePlayback();
+    }
+
+    this.isDecoding = false;
+
+    // Run scheduling once more in case items remained in decodedQueue
+    this.schedulePlayback();
+  }
+
+  private schedulePlayback(): void {
+    // If we haven't started playing this stream yet, wait until we accumulate ~150ms of audio
+    // or until the network raw queue has finished delivering chunks.
+    if (!this.isStreamingPlayback) {
+      if (this.bufferedDuration >= this.PRE_BUFFER_TARGET_SEC || (this.rawQueue.length === 0 && this.decodedQueue.length > 0)) {
+        this.isStreamingPlayback = true;
+      } else {
+        // Still filling initial buffer
+        return;
+      }
+    }
+
+    // Drain decoded queue into AudioPlayer scheduler
+    while (this.decodedQueue.length > 0) {
+      const buffer = this.decodedQueue.shift();
+      if (buffer) {
+        this.bufferedDuration -= buffer.duration;
+        this.player.scheduleBuffer(buffer);
+      }
+    }
+
+    if (this.bufferedDuration <= 0 && this.rawQueue.length === 0) {
+      this.isStreamingPlayback = false;
+    }
   }
 }
 
