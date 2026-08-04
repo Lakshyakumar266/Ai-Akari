@@ -6,38 +6,17 @@ from src.bridge.dispatcher import dispatch
 
 class AudioPlayer:
     """
-    Consumes FishStreamChunk objects.
+    Iterates a Fish Audio stream and dispatches each audio chunk
+    as a binary WebSocket packet to the browser.
 
-    Responsibilities:
-
-        • Forward audio chunks as binary WebSocket packets to the browser
-        • Yield each chunk so TimelineDispatcher can process alignment data
-
-    MPV has been removed. The browser is now the audio output.
+    The browser handles all playback via Web Audio API + AudioQueue.
+    There is no local MPV process.
     """
 
-    def play(
-        self,
-        stream,
-    ):
+    def play(self, stream) -> None:
         try:
             for chunk in stream:
-                print(
-                    "[AudioPlayer]",
-                    len(chunk.audio),
-                    "bytes",
-                )
-
                 if chunk.audio:
-                    dispatch(
-                        audio_chunk(
-                            chunk.audio
-                        )
-                    )
-
-                yield chunk
-
+                    dispatch(audio_chunk(chunk.audio))
         finally:
-            dispatch(
-                audio_end()
-            )
+            dispatch(audio_end())
