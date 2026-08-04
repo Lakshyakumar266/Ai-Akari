@@ -1,23 +1,31 @@
 /**
- * AudioPlayer
+ * AudioPlayer / AudioEngine
  *
- * Web Audio API engine. Maintains the permanent audio graph:
- *   AudioBufferSourceNode -> GainNode -> AnalyserNode -> Destination
+ * Web Audio API Engine powering real-time PCM audio playback via AudioWorklet.
  *
- * Implements an exact AudioContext time scheduler:
- *   startTime = Math.max(nextPlaybackTime, currentTime + 0.02)
- *   source.start(startTime)
- *   nextPlaybackTime = startTime + buffer.duration
+ * Audio Graph:
+ *   AudioWorkletNode ("pcm-processor")
+ *             ↓
+ *          GainNode        ← volume control
+ *             ↓
+ *        AnalyserNode      ← live RMS samples for VRM LipSync
+ *             ↓
+ *        Destination
+ *
+ * All streaming audio is raw Int16 LE PCM streamed to the AudioWorklet.
+ * Zero MP3 decoding, zero decodeAudioData(), zero codec boundary artifacts.
  */
+
+import { PCMPlayer } from "./PCMPlayer";
+import { PCMQueue } from "./PCMQueue";
 
 export class AudioPlayer {
   private readonly context: AudioContext;
   private readonly _gain: GainNode;
   private readonly _analyser: AnalyserNode;
 
-  private nextPlaybackTime = 0;
-  private activeSources: AudioBufferSourceNode[] = [];
-  private logCount = 0;
+  private readonly pcmPlayer: PCMPlayer;
+  private readonly pcmQueue: PCMQueue;
 
   constructor() {
     this.context = new AudioContext({ latencyHint: "interactive" });
@@ -27,90 +35,35 @@ export class AudioPlayer {
     this._analyser.fftSize = 2048;
     this._analyser.smoothingTimeConstant = 0;
 
-    // Connect graph: gain -> analyser -> destination
+    // Connect permanent graph: GainNode -> AnalyserNode -> Destination
     this._gain.connect(this._analyser);
     this._analyser.connect(this.context.destination);
 
-    console.log(`[AudioPlayer] Initialized AudioContext at ${this.context.sampleRate} Hz`);
+    this.pcmPlayer = new PCMPlayer(this.context, this._gain);
+    this.pcmQueue = new PCMQueue(this.pcmPlayer);
+
+    console.log(`[AudioEngine] Initialized at ${this.context.sampleRate} Hz`);
   }
 
   /**
-   * Schedule an AudioBuffer for continuous playback.
+   * Push incoming raw Int16 PCM ArrayBuffer received from WebSocket.
    */
-  scheduleBuffer(buffer: AudioBuffer): void {
+  push(chunk: ArrayBuffer): void {
     this.ensureRunning();
-
-    const now = this.context.currentTime;
-
-    // Prevent accumulated drift if playback underran or queue was empty
-    if (now > this.nextPlaybackTime) {
-      this.nextPlaybackTime = now;
-    }
-
-    const startTime = Math.max(
-      this.nextPlaybackTime,
-      now + 0.02
-    );
-
-    const source = this.context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this._gain);
-
-    source.start(startTime);
-    this.nextPlaybackTime = startTime + buffer.duration;
-
-    this.activeSources.push(source);
-
-    source.onended = () => {
-      this.activeSources = this.activeSources.filter((s) => s !== source);
-      source.disconnect();
-    };
-
-    if (this.logCount < 10) {
-      console.log(
-        `[AudioScheduler] buf#${this.logCount} | ` +
-        `dur=${buffer.duration.toFixed(3)}s | ` +
-        `start=${startTime.toFixed(3)}s | ` +
-        `next=${this.nextPlaybackTime.toFixed(3)}s | ` +
-        `now=${now.toFixed(3)}s | ` +
-        `bufSampleRate=${buffer.sampleRate} (ctxSampleRate=${this.context.sampleRate})`
-      );
-      this.logCount++;
-    }
+    this.pcmQueue.push(chunk);
   }
 
   /**
-   * Decode raw ArrayBuffer into AudioBuffer using AudioContext.
-   */
-  async decodeAudio(data: ArrayBuffer): Promise<AudioBuffer | null> {
-    try {
-      return await this.context.decodeAudioData(data.slice(0));
-    } catch (err) {
-      console.error("[AudioPlayer] decodeAudioData failed for chunk:", err);
-      return null;
-    }
-  }
-
-  /**
-   * Stop all playing & scheduled sources immediately.
+   * Stop audio and flush all buffers immediately (interrupt).
    */
   stop(): void {
-    for (const source of this.activeSources) {
-      try {
-        source.stop();
-        source.disconnect();
-      } catch {
-        // Ignored
-      }
-    }
-    this.activeSources = [];
-    this.nextPlaybackTime = 0;
-    this.logCount = 0;
-    console.log("[AudioPlayer] Stopped all audio playback.");
+    this.pcmQueue.flush();
+    console.log("[AudioEngine] Flushed audio queue.");
   }
 
   async resume(): Promise<void> {
     this.ensureRunning();
+    await this.pcmPlayer.init();
   }
 
   private ensureRunning(): void {
@@ -128,7 +81,7 @@ export class AudioPlayer {
   }
 
   get scheduledEndTime(): number {
-    return this.nextPlaybackTime;
+    return this.context.currentTime;
   }
 
   get sampleRate(): number {
@@ -137,3 +90,4 @@ export class AudioPlayer {
 }
 
 export const audioPlayer = new AudioPlayer();
+export const audioEngine = audioPlayer;
