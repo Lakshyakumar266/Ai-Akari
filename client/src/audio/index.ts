@@ -5,3 +5,5 @@ export { RingBuffer } from "./RingBuffer";
 export { WORKLET_PROCESSOR_CODE, createWorkletModuleUrl } from "./PCMProcessor";
 export { PCMQueue } from "./PCMQueue";
 export { PCMPlayer } from "./PCMPlayer";
+export { textToPhonemes, textToVisemes, phonemeToViseme } from "./phonemizeer";
+
