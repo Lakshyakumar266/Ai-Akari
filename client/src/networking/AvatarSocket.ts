@@ -23,10 +23,11 @@
  */
 
 import { avatarEvents } from "./EventBus";
-import type { AvatarEvent } from "./types";
+import type { AvatarEvent, SpeechSegmentEvent } from "./types";
 import { audioPlayer } from "../audio/AudioPlayer";
 import { audioQueue } from "../audio/AudioQueue";
 import { subtitleSync } from "../audio/SubtitleSync";
+import { speechQueue } from "../audio/SpeechQueue";
 
 const WS_URL = "ws://127.0.0.1:8765";
 
@@ -80,14 +81,17 @@ class AvatarSocket {
           }
 
           case PACKET_AUDIO_END: {
+            subtitleSync.markAudioEnd();
             console.log(
-              `[Audio] stream end | ctx=${audioPlayer.currentTime.toFixed(3)}s`,
+              `[Audio] stream end | totalDuration=${subtitleSync.totalDuration.toFixed(3)}s`,
             );
             break;
           }
 
           case PACKET_AUDIO_INTERRUPT: {
             console.log("[Audio] interrupt");
+            speechQueue.interrupt();
+            subtitleSync.reset();
             audioQueue.flush();
             break;
           }
@@ -107,8 +111,12 @@ class AvatarSocket {
 
         console.log("[AvatarSocket]", event.type, event);
 
-        // speech events are still received and emitted (carry sentence text)
-        // but LipSyncController no longer uses them — it reads audio directly.
+        if (event.type === "speech_segment") {
+          speechQueue.enqueue(event as SpeechSegmentEvent);
+        } else if (event.type === "transcript") {
+          speechQueue.interrupt();
+        }
+
         avatarEvents.emit(event);
       } catch (err) {
         console.error("[AvatarSocket] Invalid packet", err);

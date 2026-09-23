@@ -1,10 +1,3 @@
-/**
- * PCMPlayer
- *
- * Connects AudioWorkletNode to GainNode -> AnalyserNode -> Destination.
- * Handles zero-copy transferring of Float32 sample blocks to the AudioWorklet thread.
- */
-
 import { createWorkletModuleUrl } from "./PCMProcessor";
 
 export class PCMPlayer {
@@ -14,9 +7,26 @@ export class PCMPlayer {
   private workletNode: AudioWorkletNode | null = null;
   private initPromise: Promise<void> | null = null;
 
+  private _playbackTime = 0;
+  private _playedSamples = 0;
+  private _isPlaying = false;
+  private readonly progressListeners = new Set<(time: number) => void>();
+
   constructor(context: AudioContext, gainNode: GainNode) {
     this.context = context;
     this.gainNode = gainNode;
+  }
+
+  get playbackTime(): number {
+    return this._playbackTime;
+  }
+
+  get playedSamples(): number {
+    return this._playedSamples;
+  }
+
+  get isPlaying(): boolean {
+    return this._isPlaying;
   }
 
   async init(): Promise<void> {
@@ -35,9 +45,26 @@ export class PCMPlayer {
           outputChannelCount: [1],
         });
 
-        // Audio graph: Worklet -> GainNode -> AnalyserNode -> Destination
+        this.workletNode.port.onmessage = (event) => {
+          const msg = event.data;
+          if (msg.type === "playback_progress") {
+            this._playbackTime = msg.playbackTime;
+            this._playedSamples = msg.playedSamples;
+            this._isPlaying = true;
+            this.notifyProgress(msg.playbackTime);
+          } else if (msg.type === "playback_state") {
+            this._isPlaying = msg.isPlaying;
+            this._playbackTime = msg.playbackTime;
+          } else if (msg.type === "playback_reset") {
+            this._playbackTime = 0;
+            this._playedSamples = 0;
+            this._isPlaying = false;
+          }
+        };
+
+        // Graph routing: Worklet -> GainNode -> AnalyserNode -> Destination
         this.workletNode.connect(this.gainNode);
-        console.log(`[PCMPlayer] Worklet initialized successfully at ${this.context.sampleRate} Hz`);
+        console.log(`[PCMPlayer] Worklet initialized at ${this.context.sampleRate} Hz`);
       } catch (err) {
         console.error("[PCMPlayer] Failed to load AudioWorklet:", err);
       }
@@ -51,7 +78,7 @@ export class PCMPlayer {
       this.init().then(() => {
         if (this.workletNode) {
           this.workletNode.port.postMessage(
-            { type: "push", samples: samples },
+            { type: "push", samples },
             [samples.buffer]
           );
         }
@@ -60,14 +87,40 @@ export class PCMPlayer {
     }
 
     this.workletNode.port.postMessage(
-      { type: "push", samples: samples },
+      { type: "push", samples },
       [samples.buffer]
     );
   }
 
   clear(): void {
+    this._playbackTime = 0;
+    this._playedSamples = 0;
+    this._isPlaying = false;
     if (this.workletNode) {
       this.workletNode.port.postMessage({ type: "clear" });
     }
   }
+
+  onProgress(listener: (time: number) => void): () => void {
+    this.progressListeners.add(listener);
+    return () => {
+      this.progressListeners.delete(listener);
+    };
+  }
+
+  private notifyProgress(time: number): void {
+    for (const listener of this.progressListeners) {
+      try {
+        listener(time);
+      } catch (err) {
+        console.error("[PCMPlayer] Progress listener error:", err);
+      }
+    }
+  }
 }
+
+/**
+ * PCMPlayer Architecture
+ * Connects AudioWorkletNode to GainNode -> AnalyserNode -> Destination.
+ * Handles zero-copy transferring of Float32 sample blocks to the AudioWorklet thread.
+ */

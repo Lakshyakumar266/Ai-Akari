@@ -45,6 +45,9 @@ export class AudioPlayer {
     console.log(`[AudioEngine] Initialized at ${this.context.sampleRate} Hz`);
   }
 
+  private audioElement: HTMLAudioElement | null = null;
+  private mediaSource: MediaElementAudioSourceNode | null = null;
+
   /**
    * Push incoming raw Int16 PCM ArrayBuffer received from WebSocket.
    */
@@ -54,9 +57,47 @@ export class AudioPlayer {
   }
 
   /**
+   * Play an audio URL (e.g. data:audio/wav;base64,...) connected directly to the GainNode -> AnalyserNode.
+   */
+  playAudioUrl(
+    url: string,
+    onProgress?: (currentTime: number, duration: number) => void,
+    onEnded?: () => void,
+  ): void {
+    this.ensureRunning();
+
+    if (!this.audioElement) {
+      this.audioElement = new Audio();
+      this.mediaSource = this.context.createMediaElementSource(this.audioElement);
+      this.mediaSource.connect(this._gain);
+    }
+
+    this.audioElement.pause();
+    this.audioElement.src = url;
+
+    this.audioElement.ontimeupdate = () => {
+      if (this.audioElement && onProgress) {
+        onProgress(this.audioElement.currentTime, this.audioElement.duration || 1);
+      }
+    };
+
+    this.audioElement.onended = () => {
+      if (onEnded) onEnded();
+    };
+
+    this.audioElement.play().catch((err) => {
+      console.warn("[AudioPlayer] play error:", err);
+    });
+  }
+
+  /**
    * Stop audio and flush all buffers immediately (interrupt).
    */
   stop(): void {
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement.currentTime = 0;
+    }
     this.pcmQueue.flush();
     console.log("[AudioEngine] Flushed audio queue.");
   }
@@ -82,6 +123,18 @@ export class AudioPlayer {
 
   get scheduledEndTime(): number {
     return this.context.currentTime;
+  }
+
+  get playbackTime(): number {
+    return this.pcmPlayer.playbackTime;
+  }
+
+  get isPlaying(): boolean {
+    return this.pcmPlayer.isPlaying;
+  }
+
+  onProgress(listener: (time: number) => void): () => void {
+    return this.pcmPlayer.onProgress(listener);
   }
 
   get sampleRate(): number {

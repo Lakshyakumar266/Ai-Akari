@@ -11,16 +11,12 @@ async def run():
     #
     # Give dispatcher access to the running event loop.
     #
-    initialize(
-        asyncio.get_running_loop()
-    )
+    initialize(asyncio.get_running_loop())
 
     #
     # Start bridge.
     #
-    websocket_task = asyncio.create_task(
-        start_websocket_server()
-    )
+    websocket_task = asyncio.create_task(start_websocket_server())
 
     try:
         await run_voice_loop()

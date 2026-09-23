@@ -124,3 +124,27 @@ async def subtitle(text: str):
             "text": text,
         }
     )
+
+
+#
+# Speech Segment (Sentence-level synchronized dialogue & audio)
+#
+
+
+async def speech_segment(
+    text: str,
+    audio: str,
+    is_last: bool,
+    segment_index: int,
+    total_segments: int,
+):
+    await broadcaster.broadcast(
+        {
+            "type": "speech_segment",
+            "text": text,
+            "audio": audio,
+            "is_last": is_last,
+            "segment_index": segment_index,
+            "total_segments": total_segments,
+        }
+    )

@@ -64,6 +64,15 @@ export interface SubtitleEvent {
   text: string;
 }
 
+export interface SpeechSegmentEvent {
+  type: "speech_segment";
+  text: string;
+  audio: string;
+  is_last: boolean;
+  segment_index: number;
+  total_segments: number;
+}
+
 export type AvatarEvent =
   | TranscriptEvent
   | SpeechEvent
@@ -73,4 +82,5 @@ export type AvatarEvent =
   | ThinkingEndEvent
   | SpeechStartEvent
   | SpeechEndEvent
-  | SubtitleEvent;
+  | SubtitleEvent
+  | SpeechSegmentEvent;

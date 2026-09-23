@@ -24,6 +24,15 @@ def get_audio(text: str):
     dispatch(audio_end())
 
 
+def convert_to_wav(text: str) -> bytes:
+    return fishClient.tts.convert(
+        text=text,
+        reference_id=REFERENCE_ID,
+        model=TTS_MODEL,
+        format="wav",   
+    )
+
+
 def stream_audio(text_chunks):
     print("[TTS] Calling Fish WebSocket stream...")
     audio_stream = fishClient.tts.stream_websocket(

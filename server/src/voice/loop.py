@@ -4,7 +4,6 @@ import string
 
 EMOTION_TAG_PATTERN = re.compile(r"^\[(happy|sad|angry|surprised|relaxed|neutral)\]", re.IGNORECASE)
 
-
 from mistralai.client.models import (
     AssistantMessage,
     UserMessage,
@@ -15,6 +14,9 @@ from src.asr.voice_to_text import (
     transcribe_audio,
 )
 
+import base64
+from concurrent.futures import ThreadPoolExecutor
+
 from src.bridge.dispatcher import dispatch
 from src.bridge.events import (
     transcript,
@@ -22,6 +24,7 @@ from src.bridge.events import (
     subtitle,
     speech_start,
     speech_end,
+    speech_segment,
 )
 
 
@@ -36,8 +39,35 @@ from src.prompts.system_prompt_akari import (
 )
 
 from src.tts.text_to_speech import (
+    convert_to_wav,
     stream_audio,
 )
+
+
+def split_into_dialogue_units(text: str, max_words: int = 16) -> list[str]:
+    sentences = re.split(r"(?<=[.!?\n])\s+", text.strip())
+    sentences = [s.strip() for s in sentences if s.strip()]
+    if not sentences:
+        return [text.strip()] if text.strip() else []
+
+    units = []
+    current_unit = []
+    current_word_count = 0
+
+    for s in sentences:
+        s_words = len(s.split())
+        if current_unit and (current_word_count + s_words > max_words):
+            units.append(" ".join(current_unit))
+            current_unit = [s]
+            current_word_count = s_words
+        else:
+            current_unit.append(s)
+            current_word_count += s_words
+
+    if current_unit:
+        units.append(" ".join(current_unit))
+
+    return units
 
 
 async def run_voice_loop():
@@ -90,8 +120,6 @@ async def run_voice_loop():
                 )
                 break
 
-
-
             full_reply: list[str] = []
             clean_chunks: list[str] = []
 
@@ -140,30 +168,37 @@ async def run_voice_loop():
             #
             await asyncio.to_thread(collect_chunks)
 
-            #
-            # Send subtitle text to browser before audio starts.
-            #
-            subtitle_text = "".join(clean_chunks).strip()
-            if subtitle_text:
-                dispatch(subtitle(subtitle_text))
-
-            #
-            # Stream TTS audio to browser.
-            #
-            dispatch(speech_start())
-            await asyncio.to_thread(
-                stream_audio,
-                iter(clean_chunks),
-            )
-            dispatch(speech_end())
-            dispatch(emotion("Neutral"))
-
-
-            #
-            # Clean reply text for conversation history (remove all [emotion] tags)
-            #
-            raw_reply = "".join(full_reply)
+            raw_reply = "".join(clean_chunks)
             clean_reply = EMOTION_TAG_PATTERN.sub("", raw_reply).strip()
+
+            if clean_reply:
+                units = split_into_dialogue_units(clean_reply, max_words=16)
+
+                def gen_unit(u: str) -> tuple[str, bytes]:
+                    return u, convert_to_wav(u)
+
+                # Generate TTS audio for each dialogue unit in parallel
+                with ThreadPoolExecutor(max_workers=max(1, len(units))) as executor:
+                    generated = await asyncio.to_thread(
+                        lambda: list(executor.map(gen_unit, units))
+                    )
+
+                dispatch(speech_start())
+
+                for i, (u_text, wav_bytes) in enumerate(generated):
+                    b64_audio = base64.b64encode(wav_bytes).decode("ascii")
+                    data_uri = f"data:audio/wav;base64,{b64_audio}"
+                    dispatch(
+                        speech_segment(
+                            text=u_text,
+                            audio=data_uri,
+                            is_last=(i == len(generated) - 1),
+                            segment_index=i,
+                            total_segments=len(generated),
+                        )
+                    )
+
+                dispatch(emotion("Neutral"))
 
 
             history.append(
