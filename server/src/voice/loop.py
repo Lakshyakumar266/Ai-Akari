@@ -2,7 +2,11 @@ import asyncio
 import re
 import string
 
-EMOTION_TAG_PATTERN = re.compile(r"^\[(happy|sad|angry|surprised|relaxed|neutral)\]", re.IGNORECASE)
+from src.voice.emotion_feature import (
+    EmotionFeatureManager,
+    strip_all_emotion_tags,
+    split_dialogue_units_with_emotions,
+)
 
 from mistralai.client.models import (
     AssistantMessage,
@@ -122,6 +126,7 @@ async def run_voice_loop():
 
             full_reply: list[str] = []
             clean_chunks: list[str] = []
+            emotion_mgr = EmotionFeatureManager()
 
             def collect_chunks():
                 print("Akari: ", end="", flush=True)
@@ -135,15 +140,8 @@ async def run_voice_loop():
 
                     buffer += token
 
-                    # Detect and dispatch any emotion tags in the streaming buffer
-                    matches = list(EMOTION_TAG_PATTERN.finditer(buffer))
-                    if matches:
-                        for match in matches:
-                            tag_emotion = match.group(1).capitalize()
-                            print(f"\n[{tag_emotion}]")
-                            dispatch(emotion(tag_emotion))
-
-                        buffer = EMOTION_TAG_PATTERN.sub("", buffer)
+                    # Handle emotion tags via shiftable EmotionFeatureManager
+                    buffer = emotion_mgr.on_token(token, buffer, dispatch)
 
                     # Hold partial bracket tags (e.g. "[hap") until closing bracket arrives
                     if "[" in buffer:
@@ -157,7 +155,7 @@ async def run_voice_loop():
                             buffer = ""
 
                 if buffer:
-                    clean = EMOTION_TAG_PATTERN.sub("", buffer)
+                    clean = strip_all_emotion_tags(buffer)
                     if clean:
                         clean_chunks.append(clean)
 
@@ -168,37 +166,46 @@ async def run_voice_loop():
             #
             await asyncio.to_thread(collect_chunks)
 
-            raw_reply = "".join(clean_chunks)
-            clean_reply = EMOTION_TAG_PATTERN.sub("", raw_reply).strip()
+            raw_reply = "".join(full_reply)
+            
+            if emotion_mgr.mode == "synced":
+                units_with_emotions = split_dialogue_units_with_emotions(raw_reply, max_words=16)
+            else:
+                clean_reply = strip_all_emotion_tags(raw_reply).strip()
+                legacy_units = split_into_dialogue_units(clean_reply, max_words=16)
+                units_with_emotions = [(u, emotion_mgr.detected_emotion or "Neutral") for u in legacy_units]
 
-            if clean_reply:
-                units = split_into_dialogue_units(clean_reply, max_words=16)
+            clean_reply = " ".join([u[0] for u in units_with_emotions]).strip()
+
+            if units_with_emotions:
+                unit_texts = [u[0] for u in units_with_emotions]
 
                 def gen_unit(u: str) -> tuple[str, bytes]:
                     return u, convert_to_wav(u)
 
                 # Generate TTS audio for each dialogue unit in parallel
-                with ThreadPoolExecutor(max_workers=max(1, len(units))) as executor:
+                with ThreadPoolExecutor(max_workers=max(1, len(units_with_emotions))) as executor:
                     generated = await asyncio.to_thread(
-                        lambda: list(executor.map(gen_unit, units))
+                        lambda: list(executor.map(gen_unit, unit_texts))
                     )
 
                 dispatch(speech_start())
 
-                for i, (u_text, wav_bytes) in enumerate(generated):
+                for i, ((u_text, u_emotion), (_, wav_bytes)) in enumerate(zip(units_with_emotions, generated)):
                     b64_audio = base64.b64encode(wav_bytes).decode("ascii")
                     data_uri = f"data:audio/wav;base64,{b64_audio}"
                     dispatch(
                         speech_segment(
                             text=u_text,
                             audio=data_uri,
-                            is_last=(i == len(generated) - 1),
+                            is_last=(i == len(units_with_emotions) - 1),
                             segment_index=i,
-                            total_segments=len(generated),
+                            total_segments=len(units_with_emotions),
+                            emotion=u_emotion if emotion_mgr.mode == "synced" else None,
                         )
                     )
 
-                dispatch(emotion("Neutral"))
+                emotion_mgr.on_speech_concluded(dispatch)
 
 
             history.append(

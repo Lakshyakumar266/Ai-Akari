@@ -137,14 +137,16 @@ async def speech_segment(
     is_last: bool,
     segment_index: int,
     total_segments: int,
+    emotion: str = None,
 ):
-    await broadcaster.broadcast(
-        {
-            "type": "speech_segment",
-            "text": text,
-            "audio": audio,
-            "is_last": is_last,
-            "segment_index": segment_index,
-            "total_segments": total_segments,
-        }
-    )
+    payload = {
+        "type": "speech_segment",
+        "text": text,
+        "audio": audio,
+        "is_last": is_last,
+        "segment_index": segment_index,
+        "total_segments": total_segments,
+    }
+    if emotion:
+        payload["emotion"] = emotion
+    await broadcaster.broadcast(payload)

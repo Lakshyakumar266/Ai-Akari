@@ -53,8 +53,13 @@ export interface SpeechSegmentEvent {
   is_last: boolean;       // True if this is the final segment of the assistant's turn
   segment_index: number;  // 0-indexed segment order
   total_segments: number; // Total count of segments in this turn
+  emotion?: string;       // Active emotion preset ("Happy", "Sad", "Angry", "Surprised", "Relaxed", "Neutral")
 }
 ```
+
+> [!NOTE]
+> For the complete specification on facial expression synchronization and multi-emotion shifting across segments, see [spec/emotion_sync.md](./spec/emotion_sync.md).
+
 
 ---
 

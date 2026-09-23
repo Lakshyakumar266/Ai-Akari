@@ -8,6 +8,7 @@
  */
 
 import { audioPlayer } from "./AudioPlayer";
+import { avatarEvents } from "../networking/EventBus";
 import type { SpeechSegmentEvent } from "../networking/types";
 
 type SegmentStartListener = (segment: SpeechSegmentEvent) => void;
@@ -55,6 +56,12 @@ export class SpeechQueue {
     const segment = this.queue.shift()!;
     this.isPlaying = true;
     this.currentSegment = segment;
+
+    // Trigger emotion shift for this exact dialogue segment as audio begins
+    if (segment.emotion) {
+      avatarEvents.emit({ type: "emotion", emotion: segment.emotion });
+    }
+
     this.notifyStart(segment);
 
     audioPlayer.playAudioUrl(
@@ -141,6 +148,8 @@ export class SpeechQueue {
         console.error("[SpeechQueue] allEnd listener error:", err);
       }
     }
+    // Signal speech end on the avatar event bus to return facial expressions to Neutral
+    avatarEvents.emit({ type: "speech_end" });
   }
 }
 
