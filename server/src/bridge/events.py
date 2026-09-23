@@ -110,3 +110,17 @@ async def animation(name: str):
             "animation": name,
         }
     )
+
+
+#
+# Subtitle
+#
+
+
+async def subtitle(text: str):
+    await broadcaster.broadcast(
+        {
+            "type": "subtitle",
+            "text": text,
+        }
+    )

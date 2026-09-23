@@ -19,6 +19,7 @@ from src.bridge.dispatcher import dispatch
 from src.bridge.events import (
     transcript,
     emotion,
+    subtitle,
     speech_start,
     speech_end,
 )
@@ -92,8 +93,9 @@ async def run_voice_loop():
 
 
             full_reply: list[str] = []
+            clean_chunks: list[str] = []
 
-            def text_chunks():
+            def collect_chunks():
                 print("Akari: ", end="", flush=True)
 
                 buffer = ""
@@ -119,27 +121,39 @@ async def run_voice_loop():
                     if "[" in buffer:
                         last_bracket = buffer.rfind("[")
                         if last_bracket > 0:
-                            yield buffer[:last_bracket]
+                            clean_chunks.append(buffer[:last_bracket])
                             buffer = buffer[last_bracket:]
                     else:
                         if buffer:
-                            yield buffer
+                            clean_chunks.append(buffer)
                             buffer = ""
 
                 if buffer:
                     clean = EMOTION_TAG_PATTERN.sub("", buffer)
                     if clean:
-                        yield clean
+                        clean_chunks.append(clean)
 
                 print()
 
             #
-            # Start streaming TTS to browser.
+            # Collect all LLM tokens first.
+            #
+            await asyncio.to_thread(collect_chunks)
+
+            #
+            # Send subtitle text to browser before audio starts.
+            #
+            subtitle_text = "".join(clean_chunks).strip()
+            if subtitle_text:
+                dispatch(subtitle(subtitle_text))
+
+            #
+            # Stream TTS audio to browser.
             #
             dispatch(speech_start())
             await asyncio.to_thread(
                 stream_audio,
-                text_chunks(),
+                iter(clean_chunks),
             )
             dispatch(speech_end())
             dispatch(emotion("Neutral"))

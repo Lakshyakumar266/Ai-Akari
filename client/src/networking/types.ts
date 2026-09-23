@@ -59,6 +59,11 @@ export interface SpeechEndEvent {
   type: "speech_end";
 }
 
+export interface SubtitleEvent {
+  type: "subtitle";
+  text: string;
+}
+
 export type AvatarEvent =
   | TranscriptEvent
   | SpeechEvent
@@ -67,4 +72,5 @@ export type AvatarEvent =
   | ThinkingStartEvent
   | ThinkingEndEvent
   | SpeechStartEvent
-  | SpeechEndEvent;
+  | SpeechEndEvent
+  | SubtitleEvent;
