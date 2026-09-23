@@ -2,6 +2,7 @@ import asyncio
 import re
 import string
 
+from src.config import ENABLE_SUBTITLES
 from src.voice.emotion_feature import (
     EmotionFeatureManager,
     strip_all_emotion_tags,
@@ -196,7 +197,7 @@ async def run_voice_loop():
                     data_uri = f"data:audio/wav;base64,{b64_audio}"
                     dispatch(
                         speech_segment(
-                            text=u_text,
+                            text=u_text if ENABLE_SUBTITLES else "",
                             audio=data_uri,
                             is_last=(i == len(units_with_emotions) - 1),
                             segment_index=i,

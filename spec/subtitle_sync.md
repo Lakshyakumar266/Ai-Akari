@@ -212,7 +212,7 @@ if (!this.audioElement) {
 ## 7. Troubleshooting & Tuning Guide
 
 ### Adjusting Segment Length
-If sentences are breaking into 2 lines too frequently or not frequently enough, tune `max_words` in [server/src/voice/loop.py](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/voice/loop.py#L22):
+If sentences are breaking into 2 lines too frequently or not frequently enough, tune `max_words` in [server/src/voice/loop.py](./server/src/voice/loop.py#L22):
 - **Desktop / Wide Screens**: `max_words = 16-18` (fits 2 balanced lines cleanly).
 - **Mobile / Portrait Screens**: `max_words = 10-12` prevents text from overflowing or creating 3+ lines.
 
@@ -226,4 +226,27 @@ If subtitles ever disappear prematurely:
 1. Check browser console for `SpeechQueue.ts` logs.
 2. Verify that `audio.onended` is not firing early (e.g. from an empty or truncated WAV buffer).
 3. Ensure no unhandled `interrupt()` call was triggered by background microphone noise.
+
+---
+
+## 8. Subtitle Toggle Switches
+
+Subtitles can be toggled on or off at both the server configuration level and live in the client UI:
+
+### 1. Server Configuration ([server/src/config.py](./server/src/config.py#L6))
+```python
+# Subtitle display switch:
+# True  -> Subtitles are sent and rendered on screen
+# False -> Subtitles are turned off (character speaks without on-screen subtitles)
+ENABLE_SUBTITLES = True
+```
+When set to `False`, the backend dispatches empty text for speech segments while keeping voice audio and lip-sync 100% active, preventing subtitle text from appearing on screen.
+
+### 2. Client Live GUI Control ([client/src/components/SubtitleOverlay.tsx](./client/src/components/SubtitleOverlay.tsx#L61))
+```tsx
+const { showSubtitles } = useControls("Subtitles", {
+  showSubtitles: { value: true, label: "Enable Subtitles" },
+});
+```
+Provides an interactive toggle switch inside the browser's Leva control panel, allowing instant real-time toggling of subtitles without restarting any processes.
 

@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useControls } from "leva";
 import { speechQueue } from "../audio/SpeechQueue";
 import type { SpeechSegmentEvent } from "../networking/types";
 
@@ -59,6 +60,10 @@ function formatTwoLines(text: string): { line1: string[]; line2: string[]; allWo
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SubtitleOverlay() {
+  const { showSubtitles } = useControls("Subtitles", {
+    showSubtitles: { value: true, label: "Enable Subtitles" },
+  });
+
   const [line1, setLine1] = useState<string[]>([]);
   const [line2, setLine2] = useState<string[]>([]);
   const [activeWordIndex, setActiveWordIndex] = useState(-1);
@@ -127,8 +132,8 @@ export default function SubtitleOverlay() {
     };
   }, []);
 
-  // Don't render if completely faded and empty
-  if (opacity === 0 && line1.length === 0) {
+  // Don't render if disabled via control or completely faded and empty
+  if (!showSubtitles || (opacity === 0 && line1.length === 0)) {
     return null;
   }
 
