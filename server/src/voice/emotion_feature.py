@@ -138,7 +138,7 @@ class EmotionFeatureManager:
                 if tag_emotion in VALID_EMOTIONS:
                     self.detected_emotion = tag_emotion
                     if self.mode == "stream":
-                        print(f"\n[Akari Emotion Tag - Stream Mode] {tag_emotion}")
+                        # print(f"\n[Akari Emotion Tag - Stream Mode] {tag_emotion}")
                         dispatch_fn(emotion(tag_emotion))
 
             buffer = EMOTION_TAG_PATTERN.sub("", buffer)
