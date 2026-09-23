@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Scene from "./components/scene";
+import SubtitleOverlay from "./components/SubtitleOverlay";
 import { Leva } from "leva";
 import { audioPlayer } from "./audio/AudioPlayer";
 import { useEffect } from "react";
@@ -70,6 +71,8 @@ export default function App() {
           />
         </Canvas>
       </div>
+
+      <SubtitleOverlay />
     </>
   );
 }

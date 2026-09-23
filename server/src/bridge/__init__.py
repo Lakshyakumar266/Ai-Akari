@@ -8,6 +8,7 @@ from .events import (
     thinking_end,
     emotion,
     animation,
+    subtitle,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "thinking_end",
     "emotion",
     "animation",
+    "subtitle",
 ]

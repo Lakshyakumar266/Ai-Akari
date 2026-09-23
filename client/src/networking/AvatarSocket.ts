@@ -26,6 +26,7 @@ import { avatarEvents } from "./EventBus";
 import type { AvatarEvent } from "./types";
 import { audioPlayer } from "../audio/AudioPlayer";
 import { audioQueue } from "../audio/AudioQueue";
+import { subtitleSync } from "../audio/SubtitleSync";
 
 const WS_URL = "ws://127.0.0.1:8765";
 
@@ -70,6 +71,7 @@ class AvatarSocket {
         switch (type) {
           case PACKET_AUDIO_CHUNK: {
             const audioBytes = packet.slice(1).buffer;
+            subtitleSync.addBytes(audioBytes.byteLength);
             audioQueue.push(audioBytes);
             console.log(
               `[Audio] chunk ${packet.length - 1}B | end=${audioPlayer.scheduledEndTime.toFixed(3)}s`,
