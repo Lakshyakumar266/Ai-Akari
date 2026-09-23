@@ -1,38 +1,69 @@
 /**
  * SubtitleSync
  *
- * Tracks audio bytes received during a speech session to compute
- * elapsed playback time. The SubtitleOverlay reads this to know
- * how far through the text the audio has progressed.
- *
+ * Tracks audio chunk bytes and stream status for subtitle synchronization.
  * Fish Audio PCM: 44100 Hz, Int16 mono = 88200 bytes per second.
  */
 
-const PCM_SAMPLE_RATE = 44100;
-const BYTES_PER_SAMPLE = 2; // Int16
-const BYTES_PER_SECOND = PCM_SAMPLE_RATE * BYTES_PER_SAMPLE;
+const BYTES_PER_SECOND = 44100 * 2; // Int16 mono @ 44.1kHz
 
 class SubtitleSync {
-  private _totalBytes = 0;
+  private _totalAudioBytes = 0;
+  private _audioEnded = false;
+  private _listeners = new Set<() => void>();
 
-  /** Call this whenever an AUDIO_CHUNK packet arrives. */
+  /**
+   * Called whenever an AUDIO_CHUNK packet arrives.
+   */
   addBytes(byteCount: number): void {
-    this._totalBytes += byteCount;
+    this._totalAudioBytes += byteCount;
+    this.notify();
   }
 
-  /** Reset at the start of each new speech session. */
+  /**
+   * Called when AUDIO_END arrives.
+   */
+  markAudioEnd(): void {
+    this._audioEnded = true;
+    this.notify();
+  }
+
+  /**
+   * Reset on speech session start or interrupt.
+   */
   reset(): void {
-    this._totalBytes = 0;
+    this._totalAudioBytes = 0;
+    this._audioEnded = false;
+    this.notify();
   }
 
-  /** Elapsed audio time in seconds based on PCM bytes received. */
-  get elapsedSeconds(): number {
-    return this._totalBytes / BYTES_PER_SECOND;
-  }
-
-  /** Total PCM bytes received so far. */
   get totalBytes(): number {
-    return this._totalBytes;
+    return this._totalAudioBytes;
+  }
+
+  get totalDuration(): number {
+    return this._totalAudioBytes / BYTES_PER_SECOND;
+  }
+
+  get isAudioEnded(): boolean {
+    return this._audioEnded;
+  }
+
+  subscribe(listener: () => void): () => void {
+    this._listeners.add(listener);
+    return () => {
+      this._listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    for (const listener of this._listeners) {
+      try {
+        listener();
+      } catch (err) {
+        console.error("[SubtitleSync] Listener error:", err);
+      }
+    }
   }
 }
 

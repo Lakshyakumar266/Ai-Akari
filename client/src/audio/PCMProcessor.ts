@@ -24,6 +24,8 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.isBuffering = true;
     this.underruns = 0;
     this.logCount = 0;
+    this.totalSamplesPlayed = 0;
+    this.lastReportedSamples = 0;
 
     this.port.onmessage = (event) => {
       const msg = event.data;
@@ -47,6 +49,11 @@ class PCMProcessor extends AudioWorkletProcessor {
 
         if (this.isBuffering && this.bufferedCount >= this.minPrebuffer) {
           this.isBuffering = false;
+          this.port.postMessage({
+            type: "playback_state",
+            isPlaying: true,
+            playbackTime: this.totalSamplesPlayed / 44100,
+          });
         }
 
         if (this.logCount < 5) {
@@ -63,6 +70,9 @@ class PCMProcessor extends AudioWorkletProcessor {
         this.bufferedCount = 0;
         this.isBuffering = true;
         this.logCount = 0;
+        this.totalSamplesPlayed = 0;
+        this.lastReportedSamples = 0;
+        this.port.postMessage({ type: "playback_reset" });
         console.log("[AudioWorklet] Cleared buffer.");
       }
     };
@@ -82,6 +92,11 @@ class PCMProcessor extends AudioWorkletProcessor {
           console.warn("[AudioWorklet] Underrun #" + this.underruns + " (buffered: " + this.bufferedCount + ")");
         }
         this.isBuffering = true;
+        this.port.postMessage({
+          type: "playback_state",
+          isPlaying: false,
+          playbackTime: this.totalSamplesPlayed / 44100,
+        });
       }
 
       for (let i = 0; i < frameCount; i++) {
@@ -95,6 +110,18 @@ class PCMProcessor extends AudioWorkletProcessor {
       this.readIndex = (this.readIndex + 1) % this.capacity;
     }
     this.bufferedCount -= frameCount;
+    this.totalSamplesPlayed += frameCount;
+
+    // Report playback progress roughly every ~11.6ms (512 samples)
+    if (this.totalSamplesPlayed - this.lastReportedSamples >= 512) {
+      this.lastReportedSamples = this.totalSamplesPlayed;
+      this.port.postMessage({
+        type: "playback_progress",
+        playedSamples: this.totalSamplesPlayed,
+        playbackTime: this.totalSamplesPlayed / 44100,
+        bufferedCount: this.bufferedCount,
+      });
+    }
 
     return true;
   }
