@@ -71,6 +71,7 @@ export interface SpeechSegmentEvent {
   is_last: boolean;
   segment_index: number;
   total_segments: number;
+  emotion?: string;
 }
 
 export type AvatarEvent =
