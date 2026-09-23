@@ -69,6 +69,7 @@ async def run_voice_loop():
                 transcript(user_text)
             )
 
+
             cleaned = (
                 user_text.strip()
                 .lower()
@@ -98,6 +99,7 @@ async def run_voice_loop():
                 buffer = ""
 
                 for token in stream_chat(user_text, history):
+                    
                     print(token, end="", flush=True)
                     full_reply.append(token)
 
@@ -108,7 +110,7 @@ async def run_voice_loop():
                     if matches:
                         for match in matches:
                             tag_emotion = match.group(1).capitalize()
-                            print(f"\n[Akari Emotion Tag] {tag_emotion}")
+                            print(f"\n[{tag_emotion}]")
                             dispatch(emotion(tag_emotion))
 
                         buffer = EMOTION_TAG_PATTERN.sub("", buffer)
@@ -161,9 +163,6 @@ async def run_voice_loop():
                     content=clean_reply
                 )
             )
-
-
         except KeyboardInterrupt:
-
             print("\nStopped.")
             break

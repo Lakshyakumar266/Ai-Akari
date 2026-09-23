@@ -1,8 +1,14 @@
+import os
+from dotenv import load_dotenv
 import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
 
-model = WhisperModel("medium", device="cpu", compute_type="int8")
+load_dotenv() 
+
+MODEL_CACHE_DIR = "E:/HuggingFace_Cache/faster-whisper"
+
+model = WhisperModel("medium", device="cpu", compute_type="int8", download_root=MODEL_CACHE_DIR)
 
 SAMPLE_RATE = 16000
 BLOCK_DURATION = 0.02        # 20 ms (better responsiveness)
