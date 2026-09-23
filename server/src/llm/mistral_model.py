@@ -8,7 +8,7 @@ load_dotenv()
 
 mistral_api_key = os.getenv("MISTRAL_API_KEY")
 
-model = "mistral-large-latest"
+model = "ministral-8b-latest"
 client = Mistral(api_key=mistral_api_key)
 
 
