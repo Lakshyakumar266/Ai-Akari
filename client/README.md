@@ -1,4 +1,4 @@
-# Anime Wifu Client
+# AiAkari Client
 
 A 3D web viewer that renders **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*) as a VRM model, built with React, Vite, [Three.js](https://threejs.org/), and [@pixiv/three-vrm](https://github.com/pixiv/three-vrm).
 
