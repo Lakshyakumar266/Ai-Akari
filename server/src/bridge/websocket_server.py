@@ -9,8 +9,8 @@ from websockets.asyncio.server import serve, ServerConnection
 from .broadcaster import broadcaster
 from .protocol import BinaryPacket
 from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
-from src.asr.voice_to_text import unload_asr_model
-from src.asr.stream_whisper import unload_stream_model
+from src.asr.server_asr import unload_asr_model
+from src.asr.chat_whisper import unload_stream_model
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -90,7 +90,7 @@ class VoiceSession:
             self._interim_task = None
 
     async def _interim_worker(self):
-        from src.asr.stream_whisper import transcribe_stream_interim
+        from src.asr.chat_whisper import transcribe_stream_interim
 
         try:
             while True:
@@ -126,7 +126,7 @@ class VoiceSession:
 
     async def finalize(self):
         """Run final Whisper transcription and send any remaining words."""
-        from src.asr.stream_whisper import transcribe_stream_final
+        from src.asr.chat_whisper import transcribe_stream_final
 
         audio = self.get_audio()
         self.clear()
