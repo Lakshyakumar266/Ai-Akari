@@ -32,7 +32,7 @@ from src.bridge.events import (
     thinking_start,
     thinking_end,
 )
-from src.llm.mistral_model import stream_chat
+from src.llm import stream_chat
 from src.tts.text_to_speech import convert_to_wav
 from src.voice.emotion_feature import (
     EmotionFeatureManager,

@@ -11,12 +11,25 @@ from .protocol import BinaryPacket
 from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 from src.asr.server_asr import unload_asr_model
 from src.asr.chat_whisper import unload_stream_model
+from src.llm import get_provider_info, set_active_provider
 
 HOST = "127.0.0.1"
 PORT = 8765
 
 # Dynamic mode state: True = Chat Mode (client UI driven), False = Stream Mode (server mic loop driven)
 _chat_input_enabled: bool = True
+
+
+def _build_config_dict() -> dict:
+    """Builds the comprehensive configuration payload for connected clients."""
+    provider_info = get_provider_info()
+    return {
+        "type": "config",
+        "chat_input_enabled": _chat_input_enabled,
+        "llm_provider": provider_info["active_provider"],
+        "llm_model": provider_info["active_model"],
+        "available_llm_providers": provider_info["providers"],
+    }
 
 
 def get_chat_input_enabled() -> bool:
@@ -42,10 +55,7 @@ async def set_chat_input_enabled(enabled: bool):
         await start_voice_loop()
 
     # Broadcast updated config event to all connected clients
-    await broadcaster.broadcast({
-        "type": "config",
-        "chat_input_enabled": _chat_input_enabled,
-    })
+    await broadcaster.broadcast(_build_config_dict())
 
 # ─── Per-client voice recording state ────────────────────────────────────────
 
@@ -165,13 +175,8 @@ _voice_sessions: dict[ServerConnection, VoiceSession] = {}
 
 
 async def _send_config(websocket: ServerConnection):
-    """Send feature flags to the client on connect."""
-    await websocket.send(
-        json.dumps({
-            "type": "config",
-            "chat_input_enabled": _chat_input_enabled,
-        })
-    )
+    """Send feature flags and LLM provider configuration to the client on connect."""
+    await websocket.send(json.dumps(_build_config_dict()))
 
 
 async def _handle_voice_chunk(websocket: ServerConnection, data: bytes):
@@ -274,7 +279,16 @@ async def client_handler(websocket: ServerConnection):
                         enabled = (data["mode"] == "chat")
                     else:
                         enabled = True
+                    if "llm_provider" in data:
+                        set_active_provider(data["llm_provider"], data.get("llm_model"))
                     await set_chat_input_enabled(enabled)
+
+                elif msg_type == "set_llm_provider":
+                    provider_id = data.get("provider")
+                    model_id = data.get("model")
+                    if provider_id:
+                        set_active_provider(provider_id, model_id)
+                        await broadcaster.broadcast(_build_config_dict())
 
                 elif msg_type == "chat_message":
                     if _chat_input_enabled:

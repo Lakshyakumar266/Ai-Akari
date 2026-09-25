@@ -74,9 +74,25 @@ export interface SpeechSegmentEvent {
   emotion?: string;
 }
 
+export interface LlmModelOption {
+  id: string;
+  name: string;
+}
+
+export interface LlmProviderOption {
+  id: string;
+  name: string;
+  description: string;
+  default_model: string;
+  models: LlmModelOption[];
+}
+
 export interface ConfigEvent {
   type: "config";
   chat_input_enabled: boolean;
+  llm_provider?: string;
+  llm_model?: string;
+  available_llm_providers?: LlmProviderOption[];
 }
 
 export interface TranscriptionEvent {

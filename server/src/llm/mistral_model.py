@@ -24,15 +24,32 @@ def classic_chat(prompt: str, history: list) -> str:
     return chat_response.choices[0].message.content
 
 
-def stream_chat(prompt: str, history: list):
+def _normalize_history_for_mistral(history: list) -> list:
+    normalized = []
+    for item in history:
+        if isinstance(item, dict):
+            role = item.get("role", "user")
+            content = item.get("content", "")
+            if role == "assistant":
+                normalized.append(AssistantMessage(content=content))
+            else:
+                normalized.append(UserMessage(content=content))
+        else:
+            normalized.append(item)
+    return normalized
+
+
+def stream_chat(prompt: str, history: list, model_name: str | None = None):
     """Yields text deltas as Mistral generates them, instead of waiting for the full reply."""
+    active_model = model_name or model
+    normalized_history = _normalize_history_for_mistral(history)
     messages = (
         [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
-        + history
+        + normalized_history
         + [UserMessage(content=prompt)]
     )
     stream = client.chat.stream(
-        model=model,
+        model=active_model,
         messages=messages,
         temperature=0.9,
     )
