@@ -118,6 +118,7 @@ function AppContent() {
           <OverviewScreen
             character={character}
             onStartChat={() => navigate("chat", character)}
+            onOpenSettings={() => navigate("settings", character)}
           />
         )}
 

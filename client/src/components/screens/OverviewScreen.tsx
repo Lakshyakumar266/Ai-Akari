@@ -10,11 +10,13 @@ import "./OverviewScreen.css";
 interface OverviewScreenProps {
   character: string;
   onStartChat: () => void;
+  onOpenSettings?: () => void;
 }
 
 export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   character,
   onStartChat,
+  onOpenSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<"overview" | "voice">("overview");
   const [voiceEngine, setVoiceEngine] = useState<"fish" | "sovits">("fish");
@@ -76,8 +78,15 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           </button>
         </div>
 
-        {/* Personality & model link */}
-        <div className="panel-nav-row" onClick={() => {}}>
+        {/* Personality & model link -> takes user to Settings page */}
+        <div
+          className="panel-nav-row"
+          onClick={onOpenSettings}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && onOpenSettings?.()}
+          title="Open Settings to configure Personality & AI Model"
+        >
           <span>Personality & model</span>
           <IconArrowRight size={14} stroke={2} />
         </div>
