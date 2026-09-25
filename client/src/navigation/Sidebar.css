@@ -97,12 +97,100 @@
   border-radius: 0 3px 3px 0;
 }
 
-/* ─── Bottom Theme Control ─────────────────────────────────── */
+/* ─── Bottom Theme & Status Controls ───────────────────────── */
 .sidebar-bottom {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
+}
+
+/* ─── Server Status Indicator Light ─────────────────────────── */
+.sidebar-status-btn {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.sidebar-status-btn:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--border-subtle);
+}
+
+.sidebar-status-dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+  z-index: 1;
+}
+
+.sidebar-status-ping {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Connected / Online: Emerald Green */
+.sidebar-status-btn.connected .sidebar-status-dot {
+  background-color: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.8), 0 0 2px #22c55e;
+}
+
+.sidebar-status-btn.connected .sidebar-status-ping {
+  display: none;
+}
+
+/* Connecting: Warm Amber */
+.sidebar-status-btn.connecting .sidebar-status-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.7);
+}
+
+.sidebar-status-btn.connecting .sidebar-status-ping {
+  display: block;
+  background-color: rgba(245, 158, 11, 0.5);
+  animation: server-pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+/* Disconnected / Offline: Ruby Red */
+.sidebar-status-btn.disconnected .sidebar-status-dot {
+  background-color: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+.sidebar-status-btn.disconnected .sidebar-status-ping {
+  display: block;
+  background-color: rgba(239, 68, 68, 0.5);
+  animation: server-pulse-ring 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+@keyframes server-pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.85;
+  }
+  65% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
 }
 
 .sidebar-theme-group {
