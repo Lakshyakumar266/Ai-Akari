@@ -90,6 +90,7 @@ def stream_chat(
     messages = _format_messages(prompt, history)
     chosen_model = model or DEFAULT_MODEL
     url = f"{base_url.rstrip('/')}/chat/"
+    print(f"[FreeAI] stream_chat starting with model: '{chosen_model}'")
 
     try:
         with httpx.stream(

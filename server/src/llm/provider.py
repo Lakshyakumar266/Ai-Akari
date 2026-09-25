@@ -40,6 +40,7 @@ AVAILABLE_PROVIDERS = [
         "default_model": "qwen7b",
         "models": [
             {"id": "qwen7b", "name": "Qwen 2.5 7B (Fast / Free)"},
+            {"id": "qwen/qwen3.6-35b-a3b", "name": "Qwen 3.6 35B A3B"},
             {"id": "qwen3-8b", "name": "Qwen 3 8B"},
             {"id": "mistral", "name": "Mistral 7B"},
             {"id": "deepseek-r1", "name": "DeepSeek R1 Distill"},
@@ -71,26 +72,30 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
     """Updates the active LLM provider and model."""
     global _active_provider, _active_model
 
-    matched = next((p for p in AVAILABLE_PROVIDERS if p["id"] == provider_id), None)
-    if not matched:
-        print(f"[LLM Provider] Unknown provider '{provider_id}', keeping '{_active_provider}'.")
-        return get_provider_info()
-
-    _active_provider = provider_id
-
-    if model_id and any(m["id"] == model_id for m in matched["models"]):
-        _active_model = model_id
+    if provider_id in ("freeai", "mistral"):
+        _active_provider = provider_id
     else:
+        print(f"[LLM Provider] Unknown provider '{provider_id}', keeping '{_active_provider}'.")
+
+    matched = next((p for p in AVAILABLE_PROVIDERS if p["id"] == _active_provider), None)
+
+    # Strictly preserve the user's explicit model_id without silently falling back!
+    if model_id and model_id.strip():
+        _active_model = model_id.strip()
+    elif matched:
         _active_model = matched["default_model"]
+    else:
+        _active_model = "ministral-8b-latest"
 
     print(
-        f"[LLM Provider] Switched active provider to {_active_provider} (model: {_active_model})"
+        f"[LLM Provider] Active provider: {_active_provider} | Active model: '{_active_model}'"
     )
     return get_provider_info()
 
 
 def stream_chat(prompt: str, history: list) -> Generator[str, None, None]:
     """Routes stream_chat to the currently selected LLM provider and model."""
+    print(f"[LLM Provider] Routing stream_chat to provider='{_active_provider}', model='{_active_model}'")
     if _active_provider == "freeai":
         yield from freeai_model.stream_chat(prompt, history, model=_active_model)
     else:

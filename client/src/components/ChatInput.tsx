@@ -178,7 +178,11 @@ export default function ChatInput() {
     const trimmed = el.value.trim();
     if (!trimmed) return;
 
-    console.log("[ChatInput] Sending message:", trimmed);
+    const params = new URLSearchParams(window.location.search);
+    const provider = params.get("provider") || localStorage.getItem("akari_llm_provider") || "mistral";
+    const model = params.get("model") || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
+
+    console.log(`[ChatInput] Sending message: "${trimmed}" (provider=${provider}, model=${model})`);
 
     // Immediately start speech turn to keep the stop icon active throughout thinking, streaming, and audio
     speechQueue.startTurn();
@@ -186,6 +190,8 @@ export default function ChatInput() {
     avatarSocket.send({
       type: "chat_message",
       text: trimmed,
+      provider,
+      model,
     });
 
     el.value = "";

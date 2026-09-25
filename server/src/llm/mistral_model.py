@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from mistralai.client import Mistral
-from mistralai.client.models import UserMessage, SystemMessage
+from mistralai.client.models import UserMessage, SystemMessage, AssistantMessage
 from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
 
 load_dotenv()
@@ -12,16 +12,22 @@ model = "ministral-8b-latest"
 client = Mistral(api_key=mistral_api_key)
 
 
-def classic_chat(prompt: str, history: list) -> str:
+def classic_chat(prompt: str, history: list, model_name: str | None = None) -> str:
+    active_model = model_name or model
+    print(f"[Mistral] classic_chat using model: '{active_model}'")
     messages = (
         [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
-        + history
+        + _normalize_history_for_mistral(history)
         + [UserMessage(content=prompt)]
     )
-    chat_response = client.chat.complete(
-        model=model, messages=messages, temperature=0.9
-    )
-    return chat_response.choices[0].message.content
+    try:
+        chat_response = client.chat.complete(
+            model=active_model, messages=messages, temperature=0.9
+        )
+        return chat_response.choices[0].message.content or ""
+    except Exception as err:
+        print(f"[Mistral] Error with model '{active_model}': {err}")
+        return f"[Mistral Error: Model '{active_model}' failed: {err}]"
 
 
 def _normalize_history_for_mistral(history: list) -> list:
@@ -42,21 +48,26 @@ def _normalize_history_for_mistral(history: list) -> list:
 def stream_chat(prompt: str, history: list, model_name: str | None = None):
     """Yields text deltas as Mistral generates them, instead of waiting for the full reply."""
     active_model = model_name or model
+    print(f"[Mistral] stream_chat starting with model: '{active_model}'")
     normalized_history = _normalize_history_for_mistral(history)
     messages = (
         [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
         + normalized_history
         + [UserMessage(content=prompt)]
     )
-    stream = client.chat.stream(
-        model=active_model,
-        messages=messages,
-        temperature=0.9,
-    )
-    for chunk in stream:
-        delta = chunk.data.choices[0].delta.content
-        if delta:
-            yield delta
+    try:
+        stream = client.chat.stream(
+            model=active_model,
+            messages=messages,
+            temperature=0.9,
+        )
+        for chunk in stream:
+            delta = chunk.data.choices[0].delta.content
+            if delta:
+                yield delta
+    except Exception as err:
+        print(f"[Mistral] Stream error with model '{active_model}': {err}")
+        yield f"[Mistral Error: Model '{active_model}' failed: {err}]"
 
 
 VALID_EMOTIONS = {"Happy", "Sad", "Angry", "Surprised", "Relaxed", "Neutral"}

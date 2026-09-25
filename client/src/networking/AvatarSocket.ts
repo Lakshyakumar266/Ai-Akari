@@ -47,6 +47,13 @@ class AvatarSocket {
     chat_input_enabled: true,
     screen: "characters",
   };
+  private pendingLlmProvider: { provider: string; model?: string } | null = (() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const provider = params.get("provider") || localStorage.getItem("akari_llm_provider") || "mistral";
+    const model = params.get("model") || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
+    return { provider, model };
+  })();
 
   /**
    * Returns the current connection status to the Python backend server.
@@ -103,6 +110,7 @@ class AvatarSocket {
    * Sets the active LLM provider (e.g. "mistral", "freeai") and optional model on the backend.
    */
   setLlmProvider(provider: string, model?: string) {
+    this.pendingLlmProvider = { provider, model };
     if (this.lastConfig) {
       this.lastConfig = {
         ...this.lastConfig,
@@ -149,6 +157,10 @@ class AvatarSocket {
       audioPlayer.resume().catch(() => {});
       // Synchronize active mode with server immediately upon connection
       this.setMode(this.currentMode.chat_input_enabled, this.currentMode.screen);
+      // Synchronize active LLM provider & model with server immediately upon connection
+      if (this.pendingLlmProvider) {
+        this.setLlmProvider(this.pendingLlmProvider.provider, this.pendingLlmProvider.model);
+      }
     };
 
     this.socket.onmessage = (message) => {

@@ -208,6 +208,11 @@ async def _handle_chat_message(data: dict):
     if not text:
         return
 
+    provider = data.get("provider")
+    model = data.get("model")
+    if provider:
+        set_active_provider(provider, model)
+
     from src.chat.loop import (
         process_chat_message,
         stop_chat_stream,
