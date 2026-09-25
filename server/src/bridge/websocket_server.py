@@ -9,6 +9,8 @@ from websockets.asyncio.server import serve, ServerConnection
 from .broadcaster import broadcaster
 from .protocol import BinaryPacket
 from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
+from src.asr.voice_to_text import unload_asr_model
+from src.asr.stream_whisper import unload_stream_model
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -31,10 +33,12 @@ async def set_chat_input_enabled(enabled: bool):
     print(f"[Bridge] Mode updated from client: {mode_name}")
 
     if enabled:
-        # Chat mode: Stop server mic voice loop so client UI has full control
+        # Chat mode: Stop server mic voice loop and unload the medium ASR model
         await stop_voice_loop()
+        unload_asr_model()
     else:
-        # Stream mode: Start server mic voice loop to capture and stream speech & audio
+        # Stream mode: Unload the streaming small.en model, then start server voice loop with medium model
+        unload_stream_model()
         await start_voice_loop()
 
     # Broadcast updated config event to all connected clients
@@ -304,8 +308,10 @@ async def client_handler(websocket: ServerConnection):
         await broadcaster.unregister(websocket)
 
         if broadcaster.client_count == 0:
-            print("[Bridge] All clients disconnected. Halting server voice loop.")
+            print("[Bridge] All clients disconnected. Halting voice loop and unloading models.")
             await stop_voice_loop()
+            unload_asr_model()
+            unload_stream_model()
 
 
 async def start_websocket_server():

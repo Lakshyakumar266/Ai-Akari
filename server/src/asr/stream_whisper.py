@@ -33,6 +33,17 @@ def _get_model() -> WhisperModel:
     return _model
 
 
+def unload_stream_model():
+    global _model
+    if _model is not None:
+        print(f"[ASR] Unloading streaming Whisper model '{STREAMING_MODEL_NAME}'...")
+        del _model
+        _model = None
+        import gc
+
+        gc.collect()
+
+
 def transcribe_stream_interim(audio: np.ndarray) -> str:
     """Fast interim transcription during active speech (runs every ~0.5s)."""
     if audio.size == 0:

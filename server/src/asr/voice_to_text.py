@@ -9,9 +9,29 @@ load_dotenv()
 
 MODEL_CACHE_DIR = "E:/HuggingFace_Cache/faster-whisper"
 
-model = WhisperModel(
-    "medium", device="cpu", compute_type="int8", download_root=MODEL_CACHE_DIR
-)
+_asr_model: WhisperModel | None = None
+
+
+def get_asr_model() -> WhisperModel:
+    global _asr_model
+    if _asr_model is None:
+        print("[ASR] Loading ASR Whisper model 'medium' for Stream Mode...")
+        _asr_model = WhisperModel(
+            "medium", device="cpu", compute_type="int8", download_root=MODEL_CACHE_DIR
+        )
+        print("[ASR] ASR Whisper model 'medium' ready.")
+    return _asr_model
+
+
+def unload_asr_model():
+    global _asr_model
+    if _asr_model is not None:
+        print("[ASR] Unloading ASR Whisper model 'medium'...")
+        del _asr_model
+        _asr_model = None
+        import gc
+
+        gc.collect()
 
 SAMPLE_RATE = 16000
 BLOCK_DURATION = 0.02  # 20 ms (better responsiveness)
@@ -95,6 +115,7 @@ def listen_and_capture(stop_event: threading.Event | None = None) -> np.ndarray:
 def transcribe_audio(audio: np.ndarray) -> str:
     if audio.size == 0:
         return ""
+    model = get_asr_model()
     segments, info = model.transcribe(
         audio,
         language="en",

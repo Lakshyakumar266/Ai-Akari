@@ -43,25 +43,6 @@ export const StreamScreen: React.FC<StreamScreenProps> = ({ character }) => {
   }, [displayName]);
 
   return (
-    <div className="stream-screen-root" aria-label="OpenSpace Stream Screen">
-      {/* Bottom floating status indicator */}
-      <div className="stream-floating-panel">
-        <div className={`stream-indicator-dot ${isSpeaking ? "speaking" : "listening"}`} />
-        {isSpeaking ? (
-          <IconVolume size={16} stroke={1.8} style={{ color: "var(--accent-indicator)" }} />
-        ) : (
-          <IconMicrophone size={16} stroke={1.8} style={{ color: "var(--color-success)" }} />
-        )}
-        <div className="stream-status-content">
-          <span className="stream-panel-title">Stream Mode</span>
-          <span className="stream-divider">·</span>
-          <span className="stream-status-detail">{statusText}</span>
-        </div>
-        <div className="stream-badge">
-          <IconBroadcast size={13} stroke={1.8} />
-          <span>Server Mic Loop</span>
-        </div>
-      </div>
-    </div>
+    <></>
   );
 };
