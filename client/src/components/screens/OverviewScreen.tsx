@@ -4,6 +4,7 @@ import {
   IconTrash,
   IconArrowRight,
   IconPlus,
+  IconCamera,
 } from "@tabler/icons-react";
 import "./OverviewScreen.css";
 
@@ -50,7 +51,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             title="Delete character"
             onClick={() => {}}
           >
-            <IconTrash size={16} stroke={1.8} />
+            <IconCamera size={16} stroke={1.8} />
           </button>
         </div>
 

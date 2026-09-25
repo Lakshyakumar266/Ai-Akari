@@ -11,7 +11,8 @@ ENABLE_SUBTITLES = True
 # "off"    -> Disables emotion tags (stays Neutral)
 EMOTION_SYNC_MODE = "synced"
 
-# Chat input mode:
-# True  -> Voice loop is disabled; user sends text/voice from the browser UI chat box
-# False -> Server-side microphone voice loop (current default behavior)
+# Chat input mode default:
+# Note: The active conversation mode is now dynamically controlled by the connected client:
+#   - Chat Screen   -> client sends ENABLE_CHAT_INPUT=True  (client-driven text/voice chat)
+#   - Stream Screen -> client sends ENABLE_CHAT_INPUT=False (server-side mic & audio streaming)
 ENABLE_CHAT_INPUT = True
