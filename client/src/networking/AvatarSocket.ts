@@ -99,6 +99,27 @@ class AvatarSocket {
     }
   }
 
+  /**
+   * Sets the active LLM provider (e.g. "mistral", "freeai") and optional model on the backend.
+   */
+  setLlmProvider(provider: string, model?: string) {
+    if (this.lastConfig) {
+      this.lastConfig = {
+        ...this.lastConfig,
+        llm_provider: provider,
+        llm_model: model || this.lastConfig.llm_model,
+      };
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log(`[AvatarSocket] Sending set_llm_provider: provider=${provider}, model=${model}`);
+      this.send({
+        type: "set_llm_provider",
+        provider,
+        model,
+      });
+    }
+  }
+
   connect() {
     if (
       this.socket &&

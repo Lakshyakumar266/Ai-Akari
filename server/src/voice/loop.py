@@ -34,7 +34,7 @@ from src.bridge.events import (
 )
 
 
-from src.llm.mistral_model import (
+from src.llm import (
     stream_chat,
     classify_emotion,
 )

@@ -14,6 +14,7 @@ dependencies = [
     "miniaudio>=1.71",
     "mistralai>=2.8.0",
     "numpy>=2.4.6",
+    "openai>=3.19.2",
     "phonemizer>=3.4.0",
     "pyaudio>=0.2.14",
     "pydub>=0.25.1",
