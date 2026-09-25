@@ -20,6 +20,10 @@ class Broadcaster:
         self._clients: set[ServerConnection] = set()
         self._lock = asyncio.Lock()
 
+    @property
+    def client_count(self) -> int:
+        return len(self._clients)
+
     #
     # Client Management
     #

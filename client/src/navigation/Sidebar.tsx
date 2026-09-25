@@ -1,12 +1,12 @@
 import React from "react";
 import {
   IconMenu2,
-  IconUser,
-  IconMessageChatbot,
-  IconBroadcast,
-  IconPhoto,
   IconSun,
   IconMoon,
+  IconUserSquareRounded,
+  IconMessageCircle,
+  IconCube,
+  IconCamera,
 } from "@tabler/icons-react";
 import type { ScreenType } from "./types";
 import { useTheme } from "./ThemeContext";
@@ -45,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Characters / Overview"
             aria-label="Characters / Overview"
           >
-            <IconUser size={19} stroke={1.7} />
+            <IconUserSquareRounded size={19} stroke={1.7} />
           </button>
 
           {/* 2. Chat */}
@@ -56,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Chat"
             aria-label="Chat"
           >
-            <IconMessageChatbot size={19} stroke={1.7} />
+            <IconMessageCircle size={19} stroke={1.7} />
           </button>
 
           {/* 3. OpenSpace / Stream */}
@@ -67,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="OpenSpace / Stream"
             aria-label="OpenSpace / Stream"
           >
-            <IconBroadcast size={19} stroke={1.7} />
+            <IconCube size={19} stroke={1.7} />
           </button>
 
           {/* 4. Gallery */}
@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Gallery"
             aria-label="Gallery"
           >
-            <IconPhoto size={19} stroke={1.7} />
+            <IconCamera size={19} stroke={1.7} />
           </button>
         </nav>
       </div>

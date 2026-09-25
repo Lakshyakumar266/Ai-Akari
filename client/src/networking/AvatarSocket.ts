@@ -40,6 +40,30 @@ class AvatarSocket {
   private reconnectTimer: number | null = null;
   private manuallyClosed = false;
   public lastConfig: ConfigEvent | null = null;
+  private currentMode: { chat_input_enabled: boolean; screen: string } = {
+    chat_input_enabled: true,
+    screen: "characters",
+  };
+
+  /**
+   * Updates the conversation mode on the backend.
+   * - chatInputEnabled = true  -> Chat Mode (browser text/voice input)
+   * - chatInputEnabled = false -> Stream Mode (server-side mic & TTS loop)
+   */
+  setMode(chatInputEnabled: boolean, screenName: string = "") {
+    this.currentMode = { chat_input_enabled: chatInputEnabled, screen: screenName };
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log(
+        `[AvatarSocket] Sending mode: chat_input_enabled=${chatInputEnabled}, screen=${screenName}`
+      );
+      this.send({
+        type: "set_mode",
+        chat_input_enabled: chatInputEnabled,
+        mode: chatInputEnabled ? "chat" : "stream",
+        screen: screenName,
+      });
+    }
+  }
 
   connect() {
     if (
@@ -60,6 +84,8 @@ class AvatarSocket {
     this.socket.onopen = () => {
       console.log("[AvatarSocket] Connected");
       audioPlayer.resume().catch(() => {});
+      // Synchronize active mode with server immediately upon connection
+      this.setMode(this.currentMode.chat_input_enabled, this.currentMode.screen);
     };
 
     this.socket.onmessage = (message) => {

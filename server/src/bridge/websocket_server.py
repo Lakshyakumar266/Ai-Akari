@@ -8,11 +8,40 @@ from websockets.asyncio.server import serve, ServerConnection
 
 from .broadcaster import broadcaster
 from .protocol import BinaryPacket
-from src.config import ENABLE_CHAT_INPUT
-
+from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 
 HOST = "127.0.0.1"
 PORT = 8765
+
+# Dynamic mode state: True = Chat Mode (client UI driven), False = Stream Mode (server mic loop driven)
+_chat_input_enabled: bool = True
+
+
+def get_chat_input_enabled() -> bool:
+    return _chat_input_enabled
+
+
+async def set_chat_input_enabled(enabled: bool):
+    global _chat_input_enabled
+    if _chat_input_enabled == enabled and (not enabled and is_voice_loop_running()):
+        return
+
+    _chat_input_enabled = enabled
+    mode_name = "Chat Mode (ENABLE_CHAT_INPUT=True)" if enabled else "Stream Mode (ENABLE_CHAT_INPUT=False)"
+    print(f"[Bridge] Mode updated from client: {mode_name}")
+
+    if enabled:
+        # Chat mode: Stop server mic voice loop so client UI has full control
+        await stop_voice_loop()
+    else:
+        # Stream mode: Start server mic voice loop to capture and stream speech & audio
+        await start_voice_loop()
+
+    # Broadcast updated config event to all connected clients
+    await broadcaster.broadcast({
+        "type": "config",
+        "chat_input_enabled": _chat_input_enabled,
+    })
 
 # ─── Per-client voice recording state ────────────────────────────────────────
 
@@ -136,7 +165,7 @@ async def _send_config(websocket: ServerConnection):
     await websocket.send(
         json.dumps({
             "type": "config",
-            "chat_input_enabled": ENABLE_CHAT_INPUT,
+            "chat_input_enabled": _chat_input_enabled,
         })
     )
 
@@ -188,11 +217,12 @@ async def client_handler(websocket: ServerConnection):
     Handles one connected client.
 
     Binary frames:
-      VOICE_CHUNK (0x10) + PCM_INT16_DATA  → streamed voice audio
+      VOICE_CHUNK (0x10) + PCM_INT16_DATA  → streamed voice audio (when in chat mode)
       VOICE_END   (0x11)                    → recording stopped
       AUDIO_INTERRUPT (0x03)                → stop response/stream
 
     JSON frames:
+      set_mode      → { type: "set_mode", chat_input_enabled: bool, mode: "chat"|"stream" }
       chat_message  → { type: "chat_message", text: "..." }
       interrupt     → { type: "interrupt" }
     """
@@ -202,9 +232,6 @@ async def client_handler(websocket: ServerConnection):
 
     try:
         async for message in websocket:
-            if not ENABLE_CHAT_INPUT:
-                continue
-
             # ── Binary path — voice audio packets ──────────────────────
             if isinstance(message, bytes):
                 if len(message) < 1:
@@ -213,10 +240,12 @@ async def client_handler(websocket: ServerConnection):
                 packet_type = message[0]
 
                 if packet_type == BinaryPacket.VOICE_CHUNK:
-                    await _handle_voice_chunk(websocket, message[1:])
+                    if _chat_input_enabled:
+                        await _handle_voice_chunk(websocket, message[1:])
 
                 elif packet_type == BinaryPacket.VOICE_END:
-                    await _handle_voice_end(websocket)
+                    if _chat_input_enabled:
+                        await _handle_voice_end(websocket)
 
                 elif packet_type == BinaryPacket.AUDIO_INTERRUPT:
                     from src.chat.loop import stop_chat_stream
@@ -229,18 +258,34 @@ async def client_handler(websocket: ServerConnection):
 
                 continue
 
-            # ── JSON path — text messages ──────────────────────────────
+            # ── JSON path — text messages & mode control ───────────────
             try:
                 data = json.loads(message)
                 msg_type = data.get("type", "")
 
-                if msg_type == "chat_message":
-                    asyncio.create_task(_handle_chat_message(data))
+                if msg_type == "set_mode":
+                    if "chat_input_enabled" in data:
+                        enabled = bool(data["chat_input_enabled"])
+                    elif "mode" in data:
+                        enabled = (data["mode"] == "chat")
+                    else:
+                        enabled = True
+                    await set_chat_input_enabled(enabled)
+
+                elif msg_type == "chat_message":
+                    if _chat_input_enabled:
+                        asyncio.create_task(_handle_chat_message(data))
+                    else:
+                        print("[Bridge] Received chat_message while in stream mode, switching to chat mode.")
+                        await set_chat_input_enabled(True)
+                        asyncio.create_task(_handle_chat_message(data))
+
                 elif msg_type in ("interrupt", "stop"):
                     from src.chat.loop import stop_chat_stream
 
                     print("[Bridge] JSON interrupt received from client.")
                     await stop_chat_stream()
+
                 else:
                     print(f"[Bridge] Unknown message type: {msg_type}")
 
@@ -257,6 +302,10 @@ async def client_handler(websocket: ServerConnection):
             await session.stop_interim_loop()
 
         await broadcaster.unregister(websocket)
+
+        if broadcaster.client_count == 0:
+            print("[Bridge] All clients disconnected. Halting server voice loop.")
+            await stop_voice_loop()
 
 
 async def start_websocket_server():

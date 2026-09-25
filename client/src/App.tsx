@@ -13,6 +13,7 @@ import { OverviewScreen } from "./components/screens/OverviewScreen";
 import { ChatScreen } from "./components/screens/ChatScreen";
 import { StreamScreen } from "./components/screens/StreamScreen";
 import { GalleryScreen } from "./components/screens/GalleryScreen";
+import { avatarSocket } from "./networking/AvatarSocket";
 import "./App.css";
 
 function CameraRig({ isOverview }: { isOverview: boolean }) {
@@ -25,6 +26,16 @@ function CameraRig({ isOverview }: { isOverview: boolean }) {
 
 function AppContent() {
   const { screen, character, navigate } = useNavigation();
+
+  // Synchronize dynamic conversation mode with backend whenever screen changes:
+  // - screen === "stream" -> Stream Mode (ENABLE_CHAT_INPUT=false: server mic voice loop)
+  // - screen === "chat"   -> Chat Mode   (ENABLE_CHAT_INPUT=true: browser UI text/voice chat)
+  // - overview / gallery  -> Chat Mode   (ENABLE_CHAT_INPUT=true: server mic idle)
+  useEffect(() => {
+    const isStreamMode = screen === "stream";
+    const chatInputEnabled = !isStreamMode;
+    avatarSocket.setMode(chatInputEnabled, screen);
+  }, [screen]);
 
   // Unlock Web Audio on first pointer interaction
   useEffect(() => {

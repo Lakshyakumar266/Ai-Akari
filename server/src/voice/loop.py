@@ -1,6 +1,9 @@
 import asyncio
 import re
 import string
+import threading
+import base64
+from concurrent.futures import ThreadPoolExecutor
 
 from src.config import ENABLE_SUBTITLES
 from src.voice.emotion_feature import (
@@ -19,9 +22,6 @@ from src.asr.voice_to_text import (
     transcribe_audio,
 )
 
-import base64
-from concurrent.futures import ThreadPoolExecutor
-
 from src.bridge.dispatcher import dispatch
 from src.bridge.events import (
     transcript,
@@ -30,6 +30,7 @@ from src.bridge.events import (
     speech_start,
     speech_end,
     speech_segment,
+    turn_end,
 )
 
 
@@ -75,26 +76,40 @@ def split_into_dialogue_units(text: str, max_words: int = 16) -> list[str]:
     return units
 
 
-async def run_voice_loop():
+async def run_voice_loop(stop_event: threading.Event | None = None):
     history = []
 
     print(
-        "Akari companion is live. Say 'stop' to exit.\n"
+        "[VoiceLoop] Akari companion voice loop is live. Say 'stop' to exit.\n"
     )
 
     while True:
+        if stop_event and stop_event.is_set():
+            print("[VoiceLoop] Stop event detected before listening.")
+            break
+
         try:
             #
             # Listen
             #
             audio = await asyncio.to_thread(
-                listen_and_capture
+                listen_and_capture,
+                stop_event,
             )
+
+            if stop_event and stop_event.is_set():
+                break
+
+            if audio.size == 0:
+                continue
 
             user_text = await asyncio.to_thread(
                 transcribe_audio,
                 audio,
             )
+
+            if stop_event and stop_event.is_set():
+                break
 
             if not user_text.strip():
                 continue
@@ -104,7 +119,6 @@ async def run_voice_loop():
             dispatch(
                 transcript(user_text)
             )
-
 
             cleaned = (
                 user_text.strip()
@@ -119,10 +133,22 @@ async def run_voice_loop():
 
                 print(f"Akari: {goodbye}")
 
-                await asyncio.to_thread(
-                    stream_audio,
-                    iter([goodbye]),
+                wav_bytes = await asyncio.to_thread(convert_to_wav, goodbye)
+                b64_audio = base64.b64encode(wav_bytes).decode("ascii")
+                data_uri = f"data:audio/wav;base64,{b64_audio}"
+
+                dispatch(speech_start())
+                dispatch(
+                    speech_segment(
+                        text=goodbye if ENABLE_SUBTITLES else "",
+                        audio=data_uri,
+                        is_last=True,
+                        segment_index=0,
+                        total_segments=1,
+                        emotion="Neutral",
+                    )
                 )
+                dispatch(turn_end())
                 break
 
             full_reply: list[str] = []
@@ -135,7 +161,9 @@ async def run_voice_loop():
                 buffer = ""
 
                 for token in stream_chat(user_text, history):
-                    
+                    if stop_event and stop_event.is_set():
+                        break
+
                     print(token, end="", flush=True)
                     full_reply.append(token)
 
@@ -167,6 +195,9 @@ async def run_voice_loop():
             #
             await asyncio.to_thread(collect_chunks)
 
+            if stop_event and stop_event.is_set():
+                break
+
             raw_reply = "".join(full_reply)
             
             if emotion_mgr.mode == "synced":
@@ -190,6 +221,9 @@ async def run_voice_loop():
                         lambda: list(executor.map(gen_unit, unit_texts))
                     )
 
+                if stop_event and stop_event.is_set():
+                    break
+
                 dispatch(speech_start())
 
                 for i, ((u_text, u_emotion), (_, wav_bytes)) in enumerate(zip(units_with_emotions, generated)):
@@ -206,8 +240,8 @@ async def run_voice_loop():
                         )
                     )
 
+                dispatch(turn_end())
                 emotion_mgr.on_speech_concluded(dispatch)
-
 
             history.append(
                 UserMessage(
@@ -220,6 +254,45 @@ async def run_voice_loop():
                     content=clean_reply
                 )
             )
+        except asyncio.CancelledError:
+            print("[VoiceLoop] Voice loop task cancelled.")
+            break
         except KeyboardInterrupt:
             print("\nStopped.")
             break
+
+
+# ─── Global Background Task Management for Voice Loop ────────────────────────
+
+_voice_loop_task: asyncio.Task | None = None
+_voice_loop_stop_event = threading.Event()
+
+
+def is_voice_loop_running() -> bool:
+    return _voice_loop_task is not None and not _voice_loop_task.done()
+
+
+async def start_voice_loop():
+    """Starts the server-side voice loop task in the background if not already running."""
+    global _voice_loop_task, _voice_loop_stop_event
+    if is_voice_loop_running():
+        print("[VoiceLoop] Background loop already running.")
+        return
+
+    _voice_loop_stop_event.clear()
+    _voice_loop_task = asyncio.create_task(run_voice_loop(_voice_loop_stop_event))
+    print("[VoiceLoop] Started background voice loop task.")
+
+
+async def stop_voice_loop():
+    """Gracefully halts the server-side voice loop task."""
+    global _voice_loop_task, _voice_loop_stop_event
+    _voice_loop_stop_event.set()
+    if _voice_loop_task is not None and not _voice_loop_task.done():
+        _voice_loop_task.cancel()
+        try:
+            await _voice_loop_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        _voice_loop_task = None
+        print("[VoiceLoop] Stopped background voice loop task.")

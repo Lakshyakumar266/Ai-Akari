@@ -1,4 +1,5 @@
 import os
+import threading
 from dotenv import load_dotenv
 import sounddevice as sd
 import numpy as np
@@ -21,7 +22,7 @@ THRESHOLD_MULTIPLIER = 2.5  # Less likely to trigger on background noise
 STOP_THRESHOLD_RATIO = 0.65  # More forgiving while speaking
 
 
-def calibrate_silence_threshold() -> float:
+def calibrate_silence_threshold(stop_event: threading.Event | None = None) -> float:
     """Measures ambient noise for a moment to set a threshold relative to the room, not a fixed guess."""
     block_size = int(SAMPLE_RATE * BLOCK_DURATION)
     num_blocks = int(CALIBRATION_SECONDS / BLOCK_DURATION)
@@ -29,17 +30,23 @@ def calibrate_silence_threshold() -> float:
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32") as stream:
         levels = []
         for _ in range(num_blocks):
+            if stop_event and stop_event.is_set():
+                return 0.005
             block, _ = stream.read(block_size)
             levels.append(np.sqrt(np.mean(block.flatten() ** 2)))
 
-    ambient_rms = float(np.mean(levels))
+    ambient_rms = float(np.mean(levels)) if levels else 0.005
     threshold = max(ambient_rms * THRESHOLD_MULTIPLIER, 0.005)
     print(f"[calibration] ambient rms={ambient_rms:.5f}, threshold={threshold:.5f}")
     return threshold
 
 
-def listen_and_capture() -> np.ndarray:
-    start_threshold = calibrate_silence_threshold()
+def listen_and_capture(stop_event: threading.Event | None = None) -> np.ndarray:
+    if stop_event and stop_event.is_set():
+        return np.array([], dtype="float32")
+    start_threshold = calibrate_silence_threshold(stop_event)
+    if stop_event and stop_event.is_set():
+        return np.array([], dtype="float32")
     stop_threshold = (
         start_threshold * STOP_THRESHOLD_RATIO
     )  # lower bar once already talking
@@ -55,6 +62,8 @@ def listen_and_capture() -> np.ndarray:
 
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32") as stream:
         for _ in range(max_blocks):
+            if stop_event and stop_event.is_set():
+                return np.array([], dtype="float32")
             block, _ = stream.read(block_size)
             block = block.flatten()
             rms = np.sqrt(np.mean(block**2))
