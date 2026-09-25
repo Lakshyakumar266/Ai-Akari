@@ -39,7 +39,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             type="button"
             className="panel-edit-btn"
             title="Edit character profile"
-            onClick={() => {}}
+            onClick={() => { }}
           >
             <IconPencil size={15} stroke={1.8} />
             <span>Edit character</span>
@@ -48,7 +48,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
             type="button"
             className="panel-icon-btn"
             title="Delete character"
-            onClick={() => {}}
+            onClick={() => { }}
           >
             <IconCamera size={16} stroke={1.8} />
           </button>

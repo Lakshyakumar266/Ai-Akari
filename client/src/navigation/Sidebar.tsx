@@ -101,18 +101,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="sidebar-bottom">
-        {/* Settings button */}
-        <button
-          type="button"
-          className={`sidebar-nav-item ${currentScreen === "settings" ? "active" : ""}`}
-          onClick={() => onNavigate("settings")}
-          title="Settings"
-          aria-label="Settings"
-          style={{ marginBottom: "12px" }}
-        >
-          <IconSettings size={19} stroke={1.7} />
-        </button>
-
         {/* Server Connection Status Light */}
         <button
           type="button"
@@ -158,6 +146,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <IconMoon size={16} stroke={1.8} />
           </button>
         </div>
+        {/* Settings button */}
+        <button
+          type="button"
+          className={`sidebar-nav-item ${currentScreen === "settings" ? "active" : ""}`}
+          onClick={() => onNavigate("settings")}
+          title="Settings"
+          aria-label="Settings"
+          style={{ marginTop: "12px" }}
+        >
+          <IconSettings size={19} stroke={1.7} />
+        </button>
       </div>
     </aside>
   );

@@ -1,5 +1,7 @@
 import os
+import json
 from typing import Generator
+import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
@@ -44,35 +46,97 @@ def _format_messages(prompt: str, history: list) -> list[dict]:
     return messages
 
 
+
+
 def classic_chat(prompt: str, history: list, model: str = DEFAULT_MODEL) -> str:
     """Non-streaming chat completion using Free.ai API."""
-    client = get_client()
+    key, base_url = get_freeai_credentials()
     messages = _format_messages(prompt, history)
-    chat_response = client.chat.completions.create(
-        model=model or DEFAULT_MODEL,
-        messages=messages,
-        temperature=0.9,
-    )
-    return chat_response.choices[0].message.content or ""
+    chosen_model = model or DEFAULT_MODEL
+    url = f"{base_url.rstrip('/')}/chat/"
+
+    try:
+        resp = httpx.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": chosen_model,
+                "messages": messages,
+                "temperature": 0.9,
+            },
+            timeout=60.0,
+        )
+        if resp.status_code >= 400:
+            err_data = resp.json().get("error", {})
+            err_msg = err_data.get("error") if isinstance(err_data, dict) else str(err_data)
+            print(f"[FreeAI] API Error ({resp.status_code}): {err_msg}")
+            return f"[Free.ai Notice: {err_msg or 'Request failed'}]"
+
+        data = resp.json()
+        return data["choices"][0]["message"].get("content") or ""
+    except Exception as err:
+        print(f"[FreeAI] Request error: {err}")
+        return ""
 
 
 def stream_chat(
     prompt: str, history: list, model: str = DEFAULT_MODEL
 ) -> Generator[str, None, None]:
     """Yields text tokens as Free.ai generates them in real-time."""
-    client = get_client()
+    key, base_url = get_freeai_credentials()
     messages = _format_messages(prompt, history)
-    stream = client.chat.completions.create(
-        model=model or DEFAULT_MODEL,
-        messages=messages,
-        temperature=0.9,
-        stream=True,
-    )
-    for chunk in stream:
-        if chunk.choices and chunk.choices[0].delta:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
+    chosen_model = model or DEFAULT_MODEL
+    url = f"{base_url.rstrip('/')}/chat/"
+
+    try:
+        with httpx.stream(
+            "POST",
+            url,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": chosen_model,
+                "messages": messages,
+                "temperature": 0.9,
+                "stream": True,
+            },
+            timeout=60.0,
+        ) as resp:
+            if resp.status_code >= 400:
+                resp.read()
+                try:
+                    err_json = resp.json()
+                    err_data = err_json.get("error", {})
+                    err_msg = err_data.get("error") if isinstance(err_data, dict) else str(err_data)
+                except Exception:
+                    err_msg = resp.text
+                print(f"[FreeAI] Stream Error ({resp.status_code}): {err_msg}")
+                yield f"[Free.ai Error: {err_msg}]"
+                return
+
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    data_str = line[6:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                        choices = chunk.get("choices", [])
+                        if choices and choices[0].get("delta"):
+                            delta = choices[0]["delta"].get("content")
+                            if delta:
+                                yield delta
+                    except json.JSONDecodeError:
+                        continue
+    except Exception as err:
+        print(f"[FreeAI] Stream exception: {err}")
 
 
 def classify_emotion(text: str, model: str = DEFAULT_MODEL) -> str:
