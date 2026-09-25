@@ -4,19 +4,22 @@ import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
 
-load_dotenv() 
+load_dotenv()
 
 MODEL_CACHE_DIR = "E:/HuggingFace_Cache/faster-whisper"
 
-model = WhisperModel("medium", device="cpu", compute_type="int8", download_root=MODEL_CACHE_DIR)
+model = WhisperModel(
+    "medium", device="cpu", compute_type="int8", download_root=MODEL_CACHE_DIR
+)
 
 SAMPLE_RATE = 16000
-BLOCK_DURATION = 0.02        # 20 ms (better responsiveness)
-SILENCE_HANG_TIME = 1.5      # Stop after 0.8 s of silence
-MAX_RECORD_SECONDS = 15      # Voice commands rarely exceed this
-CALIBRATION_SECONDS = 1.0    # Better ambient noise estimation
-THRESHOLD_MULTIPLIER = 2.5   # Less likely to trigger on background noise
+BLOCK_DURATION = 0.02  # 20 ms (better responsiveness)
+SILENCE_HANG_TIME = 1.5  # Stop after 0.8 s of silence
+MAX_RECORD_SECONDS = 15  # Voice commands rarely exceed this
+CALIBRATION_SECONDS = 1.0  # Better ambient noise estimation
+THRESHOLD_MULTIPLIER = 2.5  # Less likely to trigger on background noise
 STOP_THRESHOLD_RATIO = 0.65  # More forgiving while speaking
+
 
 def calibrate_silence_threshold() -> float:
     """Measures ambient noise for a moment to set a threshold relative to the room, not a fixed guess."""
