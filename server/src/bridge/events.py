@@ -150,3 +150,18 @@ async def speech_segment(
     if emotion:
         payload["emotion"] = emotion
     await broadcaster.broadcast(payload)
+
+
+#
+# Transcription (voice-to-text result sent back to UI chat input)
+#
+
+
+async def transcription(text: str):
+    await broadcaster.broadcast(
+        {
+            "type": "transcription",
+            "text": text,
+        }
+    )
+

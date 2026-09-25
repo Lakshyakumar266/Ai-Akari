@@ -23,7 +23,7 @@
  */
 
 import { avatarEvents } from "./EventBus";
-import type { AvatarEvent, SpeechSegmentEvent } from "./types";
+import type { AvatarEvent, SpeechSegmentEvent, ConfigEvent } from "./types";
 import { audioPlayer } from "../audio/AudioPlayer";
 import { audioQueue } from "../audio/AudioQueue";
 import { subtitleSync } from "../audio/SubtitleSync";
@@ -39,6 +39,7 @@ class AvatarSocket {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private manuallyClosed = false;
+  public lastConfig: ConfigEvent | null = null;
 
   connect() {
     if (
@@ -111,7 +112,9 @@ class AvatarSocket {
 
         console.log("[AvatarSocket]", event.type, event);
 
-        if (event.type === "speech_segment") {
+        if (event.type === "config") {
+          this.lastConfig = event as ConfigEvent;
+        } else if (event.type === "speech_segment") {
           speechQueue.enqueue(event as SpeechSegmentEvent);
         } else if (event.type === "transcript") {
           speechQueue.interrupt();
@@ -146,9 +149,18 @@ class AvatarSocket {
 
   send(data: unknown) {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.warn("[AvatarSocket] Send failed: socket not open (readyState:", this.socket?.readyState, ")");
       return;
     }
+    console.log("[AvatarSocket] Sent:", data);
     this.socket.send(JSON.stringify(data));
+  }
+
+  sendBinary(data: ArrayBuffer) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.socket.send(data);
   }
 
   private scheduleReconnect() {

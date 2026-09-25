@@ -1,14 +1,14 @@
 {
   "name": "client",
-  "private": true,
   "version": "0.0.0",
-  "license": "GPL-3.0-only",
+  "private": true,
   "type": "module",
+  "license": "GPL-3.0-only",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "oxlint"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.5",
@@ -16,6 +16,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.7.0",
     "@react-three/postprocessing": "^3.0.4",
+    "@tabler/icons-react": "^3.48.0",
     "@tailwindcss/vite": "^4.3.3",
     "leva": "^0.10.1",
     "phonemize": "^2.0.0",

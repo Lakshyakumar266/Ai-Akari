@@ -10,8 +10,14 @@ class BinaryPacket(IntEnum):
     First byte identifies the payload.
     """
 
+    # Server → Client
     AUDIO = 1
 
     AUDIO_END = 2
 
     AUDIO_INTERRUPT = 3
+
+    # Client → Server (voice recording)
+    VOICE_CHUNK = 0x10
+
+    VOICE_END = 0x11

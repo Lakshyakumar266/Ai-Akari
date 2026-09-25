@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=2.4.6",
     "phonemizer>=3.4.0",
     "pyaudio>=0.2.14",
+    "pydub>=0.25.1",
     "python-dotenv>=1.2.2",
     "requests>=2.34.2",
     "sounddevice>=0.5.5",
