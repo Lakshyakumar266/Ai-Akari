@@ -21,6 +21,22 @@
   --color-success: #8FAF91;
 
   --sidebar-width: 56px;
+
+  /* Chatbox & Floating Action Glass Tokens - Dark */
+  --bg-input-glass: rgba(26, 28, 28, 0.78);
+  --border-input-glass: rgba(255, 255, 255, 0.10);
+  --border-input-glass-focus: rgba(255, 255, 255, 0.22);
+  --shadow-input-glass: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --color-input-text: #F2F0E7;
+  --color-input-placeholder: #777874;
+  --bg-input-btn-send: #F2F0E7;
+  --color-input-btn-send: #121212;
+  --bg-input-btn-send-hover: #FFFFFF;
+  --bg-input-btn-send-disabled: rgba(255, 255, 255, 0.08);
+  --color-input-btn-send-disabled: #555755;
+  --color-input-icon: #A6A6A0;
+  --color-input-icon-hover: #F2F0E7;
+  --bg-input-icon-hover: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] {
@@ -39,6 +55,22 @@
   --accent: #232623;
   --accent-indicator: #E05A47;
   --color-success: #4E8752;
+
+  /* Chatbox & Floating Action Glass Tokens - Light */
+  --bg-input-glass: rgba(255, 255, 255, 0.82);
+  --border-input-glass: rgba(0, 0, 0, 0.12);
+  --border-input-glass-focus: rgba(0, 0, 0, 0.28);
+  --shadow-input-glass: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --color-input-text: #1A1C1C;
+  --color-input-placeholder: #8C8C86;
+  --bg-input-btn-send: #1A1C1C;
+  --color-input-btn-send: #FFFFFF;
+  --bg-input-btn-send-hover: #2D2D2D;
+  --bg-input-btn-send-disabled: rgba(0, 0, 0, 0.08);
+  --color-input-btn-send-disabled: #A6A6A0;
+  --color-input-icon: #5A5A55;
+  --color-input-icon-hover: #1A1C1C;
+  --bg-input-icon-hover: rgba(0, 0, 0, 0.06);
 }
 
 * {

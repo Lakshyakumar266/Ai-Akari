@@ -5,7 +5,8 @@ import Scene from "./components/scene";
 import SubtitleOverlay from "./components/SubtitleOverlay";
 import { Leva } from "leva";
 import { audioPlayer } from "./audio/AudioPlayer";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { IconScanEye } from "@tabler/icons-react";
 import { Sidebar } from "./navigation/Sidebar";
 import { useNavigation } from "./navigation/useNavigation";
 import { ThemeProvider } from "./navigation/ThemeContext";
@@ -26,6 +27,7 @@ function CameraRig({ isOverview }: { isOverview: boolean }) {
 
 function AppContent() {
   const { screen, character, navigate } = useNavigation();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Synchronize dynamic conversation mode with backend whenever screen changes:
   // - screen === "stream" -> Stream Mode (ENABLE_CHAT_INPUT=false: server mic voice loop)
@@ -57,10 +59,25 @@ function AppContent() {
         currentScreen={screen}
         currentCharacter={character}
         onNavigate={(targetScreen) => navigate(targetScreen, character)}
+        isOpen={isSidebarOpen}
+        onToggleCollapse={() => setIsSidebarOpen(false)}
       />
 
+      {/* ─── Floating Sidebar Reveal Button (Bottom Left) ────────────────── */}
+      {!isSidebarOpen && (
+        <button
+          type="button"
+          className="floating-sidebar-toggle-btn"
+          onClick={() => setIsSidebarOpen(true)}
+          title="Open sidebar"
+          aria-label="Open sidebar"
+        >
+          <IconScanEye size={22} stroke={1.8} />
+        </button>
+      )}
+
       {/* ─── 2. Main Viewport & 3D Avatar Canvas ────────────────────────────── */}
-      <main className="main-viewport">
+      <main className={`main-viewport ${!isSidebarOpen ? "sidebar-collapsed" : ""}`}>
         <Canvas
           shadows
           dpr={[1, 2]}

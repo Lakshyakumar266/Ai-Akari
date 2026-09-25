@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   IconPencil,
-  IconTrash,
   IconArrowRight,
   IconPlus,
   IconCamera,

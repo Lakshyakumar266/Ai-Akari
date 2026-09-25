@@ -16,22 +16,27 @@ interface SidebarProps {
   currentScreen: ScreenType;
   currentCharacter: string;
   onNavigate: (screen: ScreenType) => void;
+  isOpen?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentScreen,
   onNavigate,
+  isOpen = true,
+  onToggleCollapse,
 }) => {
   const { theme, setTheme } = useTheme();
 
   return (
-    <aside className="app-sidebar" aria-label="Application Sidebar">
+    <aside className={`app-sidebar ${!isOpen ? "collapsed" : ""}`} aria-label="Application Sidebar">
       <div className="sidebar-top">
         <button
           type="button"
           className="sidebar-menu-btn"
-          aria-label="Navigation Menu"
-          title="Menu"
+          aria-label="Hide Sidebar"
+          title="Hide Sidebar"
+          onClick={onToggleCollapse}
         >
           <IconMenu2 size={19} stroke={1.8} />
         </button>

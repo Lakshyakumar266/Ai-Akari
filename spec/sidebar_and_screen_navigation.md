@@ -193,12 +193,21 @@ Dispatched by the server upon handshake and broadcasted whenever the active mode
 | **Client Input Bar** | Visible & interactive | Hidden (clean status pill displayed) |
 | **Interrupt / Stop** | Supported via WebSocket `interrupt` | Supported via WebSocket `interrupt` |
 
-### 5.3 Non-Blocking Voice Loop Lifecycle
-To allow instantaneous switching from Stream Mode to Chat Mode without hanging on blocking audio I/O:
-1. `listen_and_capture(stop_event)` reads raw PCM in 20ms blocks (`BLOCK_DURATION = 0.02s`).
-2. Inside each 20ms block iteration, `if stop_event and stop_event.is_set(): return np.array([], dtype="float32")` is checked.
-3. The underlying `sounddevice.InputStream` context manager cleanly releases the host audio hardware within 20 milliseconds.
-4. If all browser clients disconnect, `broadcaster.client_count == 0` automatically triggers `stop_voice_loop()`, preventing unintended background recording.
+### 5.4 Single Whisper Model Concurrency & Lifecycle
+To prevent dual model allocations from exhausting host RAM or CPU cores:
+1. **Chat Mode (`ENABLE_CHAT_INPUT = True`)**:
+   - The `medium` ASR model (`voice_to_text.py`) is completely unloaded via `unload_asr_model()`.
+   - Streaming Whisper (`stream_whisper.py`) lazily loads the lightweight `small.en` model only when browser voice chunks are received.
+2. **Stream Mode (`ENABLE_CHAT_INPUT = False`)**:
+   - Streaming Whisper (`small.en`) is unloaded via `unload_stream_model()`.
+   - The full `medium` ASR model is loaded via `get_asr_model()` to process microphone recordings.
+3. **Mutual Exclusion**: At no point in runtime are both `small.en` and `medium` models instantiated in memory simultaneously.
+4. **All Clients Disconnected**: Both models are unloaded and garbage collected to return CPU/RAM to baseline.
+
+### 5.5 Collapsible Sidebar & Floating `IconScanEye` Trigger
+- **Hamburger Action**: Clicking `IconMenu2` at the top of the sidebar sets `isSidebarOpen = false`, sliding the sidebar offscreen (`transform: translateX(-100%)`) and allowing the 3D canvas viewport to occupy the full 100vw width (`left: 0`).
+- **Floating Eye Trigger**: When collapsed, a floating button renders at `bottom: 24px; left: 20px;` containing `IconScanEye` with a translucent glassmorphic background matching the chatbox (`--bg-input-glass`, backdrop blur, thin border).
+- **Reopen Action**: Clicking the floating eye button sets `isSidebarOpen = true`, smoothly sliding the sidebar back in and hiding the floating button.
 
 ---
 
@@ -206,6 +215,10 @@ To allow instantaneous switching from Stream Mode to Chat Mode without hanging o
 
 - [x] Persistent 56px sidebar renders correctly across all 4 screens.
 - [x] Top header bar (`PROJECT AKARI.`) completely removed from all screen views.
+- [x] Chatbox in dark theme uses dark translucent glassmorphism with readable light text (`--color-input-text`) and clean button styling.
+- [x] Clicking hamburger menu collapses the sidebar and renders floating `IconScanEye` in bottom-left.
+- [x] Clicking floating `IconScanEye` re-opens sidebar and hides the floating button.
+- [x] Exactly ONE Whisper model runs at a time (`small.en` on Chat, `medium` on Stream).
 - [x] Dark mode tokens applied across sidebar, cards, and Three.js canvas background (`#1A1C1C`).
 - [x] Light mode tokens applied across sidebar, cards, and Three.js canvas background (`#F7F7F5`).
 - [x] Theme toggle updates both HTML DOM and WebGL canvas simultaneously without desynchronization.
