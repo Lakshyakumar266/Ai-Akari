@@ -247,14 +247,17 @@ export interface TurnEndEvent {
   - Runs `finalize()` on `VOICE_END` packet, flushing remaining words and sending `{ is_final: true }`.
 - **Interrupt / Abort Dispatching**:
   - Intercepts binary packet `0x03` (`BinaryPacket.AUDIO_INTERRUPT`) and JSON packets `{ type: "interrupt" }` / `{ type: "stop" }`.
-  - Invokes `await stop_chat_stream()` to cancel any active LLM generation task before processing new queries or when user requests abort.
+  - Invokes `await stop_chat_stream(emit_speech_end=True)` when user explicitly halts the conversation.
+  - When starting a new chat turn via `_handle_chat_message()`, invokes `await stop_chat_stream(emit_speech_end=False)` so that any previous generation task is safely cancelled *without* broadcasting a premature `speech_end` to the browser.
 
 ### 5.5 Backend: Chat Loop (`chat/loop.py`)
 - **Location**: [`server/src/chat/loop.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/chat/loop.py)
-- **Immediate Stream Abort (`stop_chat_stream()`)**:
+- **Immediate Stream Abort (`stop_chat_stream(emit_speech_end=True)`)**:
   - Sets a `threading.Event()` cancel flag that breaks the Mistral LLM token generator loop immediately.
   - Cancels the active `asyncio.Task` and flushes any pending dialogue units in the `unit_queue`.
-  - Dispatches `speech_end()` so facial expressions and subtitles reset to neutral across all connected clients.
+  - Only dispatches `speech_end()` when `emit_speech_end=True` (explicit stop request). Suppresses `speech_end` when replacing an active task with a new user query.
+- **Thinking Event Dispatch (`thinking_start`)**:
+  - Broadcasts `await thinking_start()` immediately when a chat message begins processing.
 - **Lookahead Final Segment Flagging (`is_last`)**:
   - Employs a 1-item lookahead buffer (`pending`) to evaluate whether each dialogue unit is the final one (`unit is None`).
   - Preceding units are broadcast with `is_last=False`; the final unit is broadcast with `is_last=True`.
@@ -262,14 +265,15 @@ export interface TurnEndEvent {
   - Emits `await turn_end()` when LLM token generation, unit queuing, and TTS dispatching are completely finished for the turn.
 - **Pipeline**:
   1. Emits `transcript` event with user query.
-  2. Evaluates exit phrases.
-  3. Streams tokens from `stream_chat(user_text, _history)` (abortable via cancel flag).
-  4. Parses bracketed emotion tags via `EmotionFeatureManager`.
-  5. Chunks tokens into discrete 1–2 line dialogue units (max 16 words or punctuation boundaries).
-  6. Synthesizes WAV audio asynchronously via Fish Audio TTS per unit.
-  7. Dispatches synchronized `speech_segment` events with base64 audio and emotion tags.
-  8. Dispatches `turn_end()` to notify client that all segments have been transmitted.
-  9. Maintains clean conversation history across turns.
+  2. Emits `thinking_start` event to indicate generation has begun.
+  3. Evaluates exit phrases.
+  4. Streams tokens from `stream_chat(user_text, _history)` (abortable via cancel flag).
+  5. Parses bracketed emotion tags via `EmotionFeatureManager`.
+  6. Chunks tokens into discrete 1–2 line dialogue units (max 16 words or punctuation boundaries).
+  7. Synthesizes WAV audio asynchronously via Fish Audio TTS per unit.
+  8. Dispatches synchronized `speech_segment` events with base64 audio and emotion tags.
+  9. Dispatches `turn_end()` to notify client that all segments have been transmitted.
+  10. Maintains clean conversation history across turns.
 
 ---
 
@@ -282,13 +286,16 @@ export interface TurnEndEvent {
    - Fish Audio TTS synthesis latency.
    - Network transmission latency.
    - Hardware audio playback across multiple sentence segments (segment 0, segment 1, segment 2...).
-3. **No Premature Deactivation**: Inter-segment gaps (200–500ms while segment $N+1$ is being synthesized) must NOT cause `speech_end` to fire or revert the button to the Send icon.
+3. **No Premature Deactivation**:
+   - Starting a new chat message must NOT broadcast `speech_end`.
+   - Inter-segment gaps (200–500ms while segment $N+1$ is being synthesized) must NOT cause `speech_end` to fire or revert the button to the Send icon.
+   - Stray server `speech_end` events must be ignored while `SpeechQueue.active` is true.
 4. **Physical Audio Completion**: The button reverts to the Send icon (`IconArrowUp`) only after physical hardware audio playback of the final segment finishes on the browser's `AudioContext`, or when the user explicitly clicks the Stop button.
 
 ### 6.2 Implementation Architecture
 - **`SpeechQueue.startTurn()`**:
   - Invoked synchronously in `ChatInput.handleSend()` prior to WebSocket message transmission.
-  - Sets `isTurnActive = true` and arms a 20s safety watchdog.
+  - Sets `isTurnActive = true` and arms a 60s safety watchdog.
   - Keeps `ChatInput.isResponding = true`.
 - **`SpeechQueue.enqueue(segment)`**:
   - Queues segment audio and begins playback if idle.
@@ -301,5 +308,9 @@ export interface TurnEndEvent {
 - **`SpeechQueue.endTurn()`**:
   - Received from server `{ type: "turn_end" }`.
   - Marks `turnEndedByServer = true`. If all audio segments have already finished playing, concludes the turn; otherwise allows the final segment to finish hardware playback naturally.
+- **`ChatInput` Event Binding**:
+  - Subscribes to `speechQueue.onAllSegmentsEnd()` as the primary trigger to set `isResponding = false`.
+  - Subscribes to `thinking_start` and `speech_start` to maintain `isResponding = true`.
+  - In `avatarEvents.subscribe("speech_end")`, ignores the event if `speechQueue.active` is true, ensuring no rogue server event can remove the stop button while a turn is active.
 - **`SpeechQueue.interrupt()`**:
   - Stops hardware audio, clears queue, sets `isTurnActive = false`, and emits `speech_end` immediately.

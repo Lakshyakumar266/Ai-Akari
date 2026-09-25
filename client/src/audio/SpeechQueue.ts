@@ -44,7 +44,7 @@ export class SpeechQueue {
     this.isTurnActive = true;
     this.turnEndedByServer = false;
     // Safety fallback in case server drops connection or generates nothing
-    this.armFallbackTimer(20000);
+    this.armFallbackTimer(60000);
   }
 
   /**

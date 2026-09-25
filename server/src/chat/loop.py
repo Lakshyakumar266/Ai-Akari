@@ -29,6 +29,8 @@ from src.bridge.events import (
     speech_end,
     speech_segment,
     turn_end,
+    thinking_start,
+    thinking_end,
 )
 from src.llm.mistral_model import stream_chat
 from src.tts.text_to_speech import convert_to_wav
@@ -71,6 +73,7 @@ def split_into_dialogue_units(text: str, max_words: int = 16) -> list[str]:
 _history: list = []
 _active_cancel_event: threading.Event | None = None
 _active_chat_task: asyncio.Task | None = None
+_suppress_cancel_speech_end = False
 
 
 def set_active_chat_task(task: asyncio.Task | None):
@@ -78,10 +81,13 @@ def set_active_chat_task(task: asyncio.Task | None):
     _active_chat_task = task
 
 
-async def stop_chat_stream():
+async def stop_chat_stream(emit_speech_end: bool = True):
     """Immediately halts the active LLM stream, TTS synthesis, and speech dispatch."""
-    global _active_cancel_event, _active_chat_task
-    print("[Chat] Stopping active stream and dialogue generation...")
+    global _active_cancel_event, _active_chat_task, _suppress_cancel_speech_end
+    print(f"[Chat] Stopping active stream (emit_speech_end={emit_speech_end})...")
+
+    if not emit_speech_end:
+        _suppress_cancel_speech_end = True
 
     if _active_cancel_event is not None:
         _active_cancel_event.set()
@@ -94,7 +100,10 @@ async def stop_chat_stream():
             pass
         _active_chat_task = None
 
-    await speech_end()
+    if emit_speech_end:
+        await speech_end()
+
+    _suppress_cancel_speech_end = False
     print("[Chat] Stream successfully stopped.")
 
 
@@ -116,6 +125,7 @@ async def process_chat_message(user_text: str):
 
     print(f"[Chat] You: {user_text}")
     await transcript(user_text)
+    await thinking_start()
 
     # Check for exit phrases
     cleaned = user_text.strip().lower().strip(string.punctuation)
@@ -289,8 +299,9 @@ async def process_chat_message(user_text: str):
         cancel_event.set()
         if not llm_task.done():
             llm_task.cancel()
-        await speech_end()
-        emotion_mgr.on_speech_concluded(dispatch)
+        if not _suppress_cancel_speech_end:
+            await speech_end()
+            emotion_mgr.on_speech_concluded(dispatch)
         raise
     finally:
         _active_cancel_event = None

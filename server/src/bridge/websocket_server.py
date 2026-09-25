@@ -176,8 +176,8 @@ async def _handle_chat_message(data: dict):
         set_active_chat_task,
     )
 
-    # Cancel previous stream if still generating/speaking
-    await stop_chat_stream()
+    # Cancel previous stream if still generating/speaking without emitting speech_end
+    await stop_chat_stream(emit_speech_end=False)
 
     task = asyncio.create_task(process_chat_message(text))
     set_active_chat_task(task)
