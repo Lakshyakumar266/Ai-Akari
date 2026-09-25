@@ -17,7 +17,7 @@ from mistralai.client.models import (
     UserMessage,
 )
 
-from src.asr.voice_to_text import (
+from src.asr.server_asr import (
     listen_and_capture,
     transcribe_audio,
 )

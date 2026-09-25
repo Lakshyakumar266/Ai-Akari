@@ -6,7 +6,7 @@ import SubtitleOverlay from "./components/SubtitleOverlay";
 import { Leva } from "leva";
 import { audioPlayer } from "./audio/AudioPlayer";
 import { useEffect, useState } from "react";
-import { IconScanEye } from "@tabler/icons-react";
+import { IconEye } from "@tabler/icons-react";
 import { Sidebar } from "./navigation/Sidebar";
 import { useNavigation } from "./navigation/useNavigation";
 import { ThemeProvider } from "./navigation/ThemeContext";
@@ -72,7 +72,7 @@ function AppContent() {
           title="Open sidebar"
           aria-label="Open sidebar"
         >
-          <IconScanEye size={22} stroke={1.8} />
+          <IconEye size={22} stroke={1.8} />
         </button>
       )}
 

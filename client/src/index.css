@@ -56,20 +56,20 @@
   --accent-indicator: #E05A47;
   --color-success: #4E8752;
 
-  /* Chatbox & Floating Action Glass Tokens - Light */
-  --bg-input-glass: rgba(255, 255, 255, 0.82);
-  --border-input-glass: rgba(0, 0, 0, 0.12);
-  --border-input-glass-focus: rgba(0, 0, 0, 0.28);
-  --shadow-input-glass: 0 8px 32px rgba(0, 0, 0, 0.08);
-  --color-input-text: #1A1C1C;
-  --color-input-placeholder: #8C8C86;
-  --bg-input-btn-send: #1A1C1C;
-  --color-input-btn-send: #FFFFFF;
-  --bg-input-btn-send-hover: #2D2D2D;
-  --bg-input-btn-send-disabled: rgba(0, 0, 0, 0.08);
-  --color-input-btn-send-disabled: #A6A6A0;
-  --color-input-icon: #5A5A55;
-  --color-input-icon-hover: #1A1C1C;
+  /* Chatbox & Floating Action Glass Tokens - Light (Restored transparent glass from master) */
+  --bg-input-glass: rgba(255, 255, 255, 0.18);
+  --border-input-glass: rgba(255, 255, 255, 0.30);
+  --border-input-glass-focus: rgba(255, 255, 255, 0.45);
+  --shadow-input-glass: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --color-input-text: #1a1a2e;
+  --color-input-placeholder: #888888;
+  --bg-input-btn-send: #1a1a2e;
+  --color-input-btn-send: #ffffff;
+  --bg-input-btn-send-hover: #2d2d44;
+  --bg-input-btn-send-disabled: #b0b0be;
+  --color-input-btn-send-disabled: #ffffff;
+  --color-input-icon: #3a3a4a;
+  --color-input-icon-hover: #1a1a2e;
   --bg-input-icon-hover: rgba(0, 0, 0, 0.06);
 }
 
