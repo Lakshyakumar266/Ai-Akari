@@ -5,6 +5,7 @@ Processes a single chat message from the browser UI.
 
 Mirrors the same LLM → TTS → dispatch pipeline as voice/loop.py,
 but receives text directly instead of listening on the server mic.
+Supports immediate stream cancellation when user clicks Stop.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import asyncio
 import re
 import string
 import base64
-from concurrent.futures import ThreadPoolExecutor
+import threading
 
 from mistralai.client.models import (
     AssistantMessage,
@@ -25,7 +26,9 @@ from src.bridge.dispatcher import dispatch
 from src.bridge.events import (
     transcript,
     speech_start,
+    speech_end,
     speech_segment,
+    turn_end,
 )
 from src.llm.mistral_model import stream_chat
 from src.tts.text_to_speech import convert_to_wav
@@ -63,9 +66,36 @@ def split_into_dialogue_units(text: str, max_words: int = 16) -> list[str]:
     return units
 
 
-# ─── Shared conversation history ─────────────────────────────────────────────
+# ─── Shared conversation history & active task tracking ──────────────────────
 
 _history: list = []
+_active_cancel_event: threading.Event | None = None
+_active_chat_task: asyncio.Task | None = None
+
+
+def set_active_chat_task(task: asyncio.Task | None):
+    global _active_chat_task
+    _active_chat_task = task
+
+
+async def stop_chat_stream():
+    """Immediately halts the active LLM stream, TTS synthesis, and speech dispatch."""
+    global _active_cancel_event, _active_chat_task
+    print("[Chat] Stopping active stream and dialogue generation...")
+
+    if _active_cancel_event is not None:
+        _active_cancel_event.set()
+
+    if _active_chat_task is not None and not _active_chat_task.done():
+        _active_chat_task.cancel()
+        try:
+            await _active_chat_task
+        except (asyncio.CancelledError, Exception):
+            pass
+        _active_chat_task = None
+
+    await speech_end()
+    print("[Chat] Stream successfully stopped.")
 
 
 async def process_chat_message(user_text: str):
@@ -76,10 +106,13 @@ async def process_chat_message(user_text: str):
       3. Generate TTS audio per dialogue unit
       4. Dispatch speech_segment events to client
     """
-    global _history
+    global _history, _active_cancel_event
 
     if not user_text.strip():
         return
+
+    cancel_event = threading.Event()
+    _active_cancel_event = cancel_event
 
     print(f"[Chat] You: {user_text}")
     await transcript(user_text)
@@ -101,6 +134,7 @@ async def process_chat_message(user_text: str):
             total_segments=1,
             emotion="Sad",
         )
+        await turn_end()
         return
 
     full_reply: list[str] = []
@@ -116,6 +150,10 @@ async def process_chat_message(user_text: str):
 
         try:
             for token in stream_chat(user_text, _history):
+                if cancel_event.is_set():
+                    print("\n[Chat] Stream cancelled by user stop request.")
+                    return
+
                 print(token, end="", flush=True)
                 full_reply.append(token)
                 buffer += token
@@ -150,7 +188,8 @@ async def process_chat_message(user_text: str):
                 loop.call_soon_threadsafe(unit_queue.put_nowait, (clean, current_emotion))
 
         except Exception as e:
-            print("[Chat] LLM stream error:", e)
+            if not cancel_event.is_set():
+                print("[Chat] LLM stream error:", e)
         finally:
             print()
             loop.call_soon_threadsafe(unit_queue.put_nowait, None)
@@ -159,40 +198,99 @@ async def process_chat_message(user_text: str):
 
     segment_index = 0
     speech_started = False
+    pending: tuple[str, str, str, int] | None = None
 
-    while True:
-        unit = await unit_queue.get()
-        if unit is None:
-            break
+    try:
+        while True:
+            if cancel_event.is_set():
+                break
 
-        u_text, u_emotion = unit
+            try:
+                unit = await asyncio.wait_for(unit_queue.get(), timeout=0.1)
+            except asyncio.TimeoutError:
+                if cancel_event.is_set():
+                    break
+                if llm_task.done() and unit_queue.empty():
+                    break
+                continue
 
-        try:
-            wav_bytes = await asyncio.to_thread(convert_to_wav, u_text)
-            b64_audio = base64.b64encode(wav_bytes).decode("ascii")
-            data_uri = f"data:audio/wav;base64,{b64_audio}"
+            if cancel_event.is_set():
+                break
 
+            # If we had a pending unit, we now know whether it was the last or not:
+            if pending is not None:
+                p_text, p_emotion, p_audio, p_idx = pending
+                is_last_unit = (unit is None)
+                if not speech_started:
+                    await speech_start()
+                    speech_started = True
+
+                await speech_segment(
+                    text=p_text if ENABLE_SUBTITLES else "",
+                    audio=p_audio,
+                    is_last=is_last_unit,
+                    segment_index=p_idx,
+                    total_segments=-1,
+                    emotion=p_emotion if emotion_mgr.mode == "synced" else None,
+                )
+                pending = None
+
+            if unit is None:
+                break
+
+            u_text, u_emotion = unit
+
+            try:
+                wav_bytes = await asyncio.to_thread(convert_to_wav, u_text)
+                if cancel_event.is_set():
+                    break
+
+                b64_audio = base64.b64encode(wav_bytes).decode("ascii")
+                data_uri = f"data:audio/wav;base64,{b64_audio}"
+                pending = (u_text, u_emotion, data_uri, segment_index)
+                segment_index += 1
+            except Exception as e:
+                if not cancel_event.is_set():
+                    print(f"[Chat] TTS error for '{u_text}':", e)
+
+        # Flush any remaining pending unit as is_last=True
+        if pending is not None and not cancel_event.is_set():
+            p_text, p_emotion, p_audio, p_idx = pending
             if not speech_started:
                 await speech_start()
                 speech_started = True
 
             await speech_segment(
-                text=u_text if ENABLE_SUBTITLES else "",
-                audio=data_uri,
-                is_last=False,
-                segment_index=segment_index,
+                text=p_text if ENABLE_SUBTITLES else "",
+                audio=p_audio,
+                is_last=True,
+                segment_index=p_idx,
                 total_segments=-1,
-                emotion=u_emotion if emotion_mgr.mode == "synced" else None,
+                emotion=p_emotion if emotion_mgr.mode == "synced" else None,
             )
-            segment_index += 1
-        except Exception as e:
-            print(f"[Chat] TTS error for '{u_text}':", e)
 
-    await llm_task
+        if not cancel_event.is_set():
+            await llm_task
+            await turn_end()
+            emotion_mgr.on_speech_concluded(dispatch)
 
-    emotion_mgr.on_speech_concluded(dispatch)
+            raw_reply = "".join(full_reply)
+            clean_reply = strip_all_emotion_tags(raw_reply).strip()
+            if clean_reply:
+                _history.append(UserMessage(content=user_text))
+                _history.append(AssistantMessage(content=clean_reply))
+        else:
+            if not llm_task.done():
+                llm_task.cancel()
+            await speech_end()
+            emotion_mgr.on_speech_concluded(dispatch)
 
-    raw_reply = "".join(full_reply)
-    clean_reply = strip_all_emotion_tags(raw_reply).strip()
-    _history.append(UserMessage(content=user_text))
-    _history.append(AssistantMessage(content=clean_reply))
+    except asyncio.CancelledError:
+        cancel_event.set()
+        if not llm_task.done():
+            llm_task.cancel()
+        await speech_end()
+        emotion_mgr.on_speech_concluded(dispatch)
+        raise
+    finally:
+        _active_cancel_event = None

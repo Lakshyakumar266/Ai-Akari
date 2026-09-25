@@ -103,6 +103,28 @@ export interface TranscriptionEvent {
 }
 ```
 
+#### `speech_segment` (Server → Client)
+Sent per dialogue unit containing synthesized audio and emotion:
+```typescript
+export interface SpeechSegmentEvent {
+  type: "speech_segment";
+  text: string;
+  audio: string;        // base64 data URI (data:audio/wav;base64,...)
+  is_last: boolean;     // true if this is the final segment of the turn
+  segment_index: number;
+  total_segments: number;
+  emotion?: string;
+}
+```
+
+#### `turn_end` (Server → Client)
+Dispatched when the server finishes generating, queuing, and dispatching all dialogue segments for the current turn:
+```typescript
+export interface TurnEndEvent {
+  type: "turn_end";
+}
+```
+
 ---
 
 ## 4. Key Knowledge & Lessons Learned
@@ -183,6 +205,10 @@ export interface TranscriptionEvent {
   - Uncontrolled `<textarea>` with `ref` for instant native responsiveness.
   - `handleKeyDown`: Enter key without Shift submits via `handleSend()`; Shift+Enter creates a newline.
   - Direct DOM button property mutation (`sendBtnRef.current.disabled = !hasText`) for instantaneous visual feedback without waiting for React re-render passes.
+  - **Dynamic Stop Response Button (`IconPlayerStopFilled`)**:
+    - When `isResponding` is true (AI generating or speaking response), the action button switches from the dark up-arrow send button to a vibrant royal blue circle (`#2563eb`) displaying a white square (`IconPlayerStopFilled`).
+    - The stop button remains clickable (`disabled = false`).
+    - Clicking Stop triggers `handleStop()`, which invokes `speechQueue.interrupt()`, dispatches `{ type: "interrupt" }`, clears queued segments and audio playback, and resets the button state to send mode.
 
 ### 5.2 Frontend: `SubtitleOverlay.tsx`
 - **Location**: [`client/src/components/SubtitleOverlay.tsx`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/client/src/components/SubtitleOverlay.tsx)
@@ -219,15 +245,61 @@ export interface TranscriptionEvent {
   - Runs background `_interim_worker` every `0.5s` on accumulated audio (> 0.4s).
   - Tracks `_sent_words_count` and emits only novel words (`is_final: false`).
   - Runs `finalize()` on `VOICE_END` packet, flushing remaining words and sending `{ is_final: true }`.
+- **Interrupt / Abort Dispatching**:
+  - Intercepts binary packet `0x03` (`BinaryPacket.AUDIO_INTERRUPT`) and JSON packets `{ type: "interrupt" }` / `{ type: "stop" }`.
+  - Invokes `await stop_chat_stream()` to cancel any active LLM generation task before processing new queries or when user requests abort.
 
 ### 5.5 Backend: Chat Loop (`chat/loop.py`)
 - **Location**: [`server/src/chat/loop.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/chat/loop.py)
+- **Immediate Stream Abort (`stop_chat_stream()`)**:
+  - Sets a `threading.Event()` cancel flag that breaks the Mistral LLM token generator loop immediately.
+  - Cancels the active `asyncio.Task` and flushes any pending dialogue units in the `unit_queue`.
+  - Dispatches `speech_end()` so facial expressions and subtitles reset to neutral across all connected clients.
+- **Lookahead Final Segment Flagging (`is_last`)**:
+  - Employs a 1-item lookahead buffer (`pending`) to evaluate whether each dialogue unit is the final one (`unit is None`).
+  - Preceding units are broadcast with `is_last=False`; the final unit is broadcast with `is_last=True`.
+- **Turn Conclusion Broadcast (`turn_end`)**:
+  - Emits `await turn_end()` when LLM token generation, unit queuing, and TTS dispatching are completely finished for the turn.
 - **Pipeline**:
   1. Emits `transcript` event with user query.
   2. Evaluates exit phrases.
-  3. Streams tokens from `stream_chat(user_text, history)`.
+  3. Streams tokens from `stream_chat(user_text, _history)` (abortable via cancel flag).
   4. Parses bracketed emotion tags via `EmotionFeatureManager`.
   5. Chunks tokens into discrete 1–2 line dialogue units (max 16 words or punctuation boundaries).
   6. Synthesizes WAV audio asynchronously via Fish Audio TTS per unit.
   7. Dispatches synchronized `speech_segment` events with base64 audio and emotion tags.
-  8. Maintains clean conversation history across turns.
+  8. Dispatches `turn_end()` to notify client that all segments have been transmitted.
+  9. Maintains clean conversation history across turns.
+
+---
+
+## 6. Response & Playing State Lifecycle Contract
+
+### 6.1 Requirements
+1. **Instant Feedback**: The stop icon (`IconPlayerStopFilled` in royal blue `#3b82f6` circle) must appear immediately upon Send click or Enter keypress.
+2. **Turn Continuity**: The stop icon must persist without flickering across:
+   - LLM thinking / token generation latency.
+   - Fish Audio TTS synthesis latency.
+   - Network transmission latency.
+   - Hardware audio playback across multiple sentence segments (segment 0, segment 1, segment 2...).
+3. **No Premature Deactivation**: Inter-segment gaps (200–500ms while segment $N+1$ is being synthesized) must NOT cause `speech_end` to fire or revert the button to the Send icon.
+4. **Physical Audio Completion**: The button reverts to the Send icon (`IconArrowUp`) only after physical hardware audio playback of the final segment finishes on the browser's `AudioContext`, or when the user explicitly clicks the Stop button.
+
+### 6.2 Implementation Architecture
+- **`SpeechQueue.startTurn()`**:
+  - Invoked synchronously in `ChatInput.handleSend()` prior to WebSocket message transmission.
+  - Sets `isTurnActive = true` and arms a 20s safety watchdog.
+  - Keeps `ChatInput.isResponding = true`.
+- **`SpeechQueue.enqueue(segment)`**:
+  - Queues segment audio and begins playback if idle.
+  - Resets turn safety watchdogs.
+- **Inter-Segment Continuity**:
+  - When segment audio finishes on `AudioPlayer`:
+    - If `queue.length > 0`: immediately plays next segment.
+    - If `segment.is_last || turnEndedByServer || !isTurnActive`: calls `finishTurn()` -> emits `speech_end` -> reverts button.
+    - Else: retains `isTurnActive = true`, arms a 10s watchdog, and waits for next segment without emitting `speech_end`.
+- **`SpeechQueue.endTurn()`**:
+  - Received from server `{ type: "turn_end" }`.
+  - Marks `turnEndedByServer = true`. If all audio segments have already finished playing, concludes the turn; otherwise allows the final segment to finish hardware playback naturally.
+- **`SpeechQueue.interrupt()`**:
+  - Stops hardware audio, clears queue, sets `isTurnActive = false`, and emits `speech_end` immediately.

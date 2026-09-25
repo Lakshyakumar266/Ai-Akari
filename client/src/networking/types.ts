@@ -85,6 +85,10 @@ export interface TranscriptionEvent {
   is_final: boolean;
 }
 
+export interface TurnEndEvent {
+  type: "turn_end";
+}
+
 export type AvatarEvent =
   | TranscriptEvent
   | SpeechEvent
@@ -97,4 +101,5 @@ export type AvatarEvent =
   | SubtitleEvent
   | SpeechSegmentEvent
   | ConfigEvent
-  | TranscriptionEvent;
+  | TranscriptionEvent
+  | TurnEndEvent;

@@ -165,3 +165,17 @@ async def transcription(text: str):
         }
     )
 
+
+#
+# Turn End (signaled when server has finished generating/dispatching all segments for a turn)
+#
+
+
+async def turn_end():
+    await broadcaster.broadcast(
+        {
+            "type": "turn_end",
+        }
+    )
+
+
