@@ -7,6 +7,7 @@ import {
   IconMessageCircle,
   IconCube,
   IconCamera,
+  IconSettings,
 } from "@tabler/icons-react";
 import type { ScreenType } from "./types";
 import { useTheme } from "./ThemeContext";
@@ -100,6 +101,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="sidebar-bottom">
+        {/* Settings button */}
+        <button
+          type="button"
+          className={`sidebar-nav-item ${currentScreen === "settings" ? "active" : ""}`}
+          onClick={() => onNavigate("settings")}
+          title="Settings"
+          aria-label="Settings"
+          style={{ marginBottom: "12px" }}
+        >
+          <IconSettings size={19} stroke={1.7} />
+        </button>
+
         {/* Server Connection Status Light */}
         <button
           type="button"
