@@ -35,15 +35,49 @@ const PACKET_AUDIO_CHUNK = 1;
 const PACKET_AUDIO_END = 2;
 const PACKET_AUDIO_INTERRUPT = 3;
 
+export type ConnectionStatus = "connected" | "connecting" | "disconnected";
+
 class AvatarSocket {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private manuallyClosed = false;
+  private statusListeners = new Set<(status: ConnectionStatus) => void>();
   public lastConfig: ConfigEvent | null = null;
   private currentMode: { chat_input_enabled: boolean; screen: string } = {
     chat_input_enabled: true,
     screen: "characters",
   };
+
+  /**
+   * Returns the current connection status to the Python backend server.
+   */
+  getConnectionStatus(): ConnectionStatus {
+    if (!this.socket) return "disconnected";
+    if (this.socket.readyState === WebSocket.OPEN) return "connected";
+    if (this.socket.readyState === WebSocket.CONNECTING) return "connecting";
+    return "disconnected";
+  }
+
+  /**
+   * Subscribes to connection status changes. Invokes callback immediately with current status.
+   */
+  onStatusChange(listener: (status: ConnectionStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    listener(this.getConnectionStatus());
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  private notifyStatus(status: ConnectionStatus) {
+    for (const listener of this.statusListeners) {
+      try {
+        listener(status);
+      } catch (err) {
+        console.error("[AvatarSocket] Error in status listener", err);
+      }
+    }
+  }
 
   /**
    * Updates the conversation mode on the backend.
@@ -76,13 +110,21 @@ class AvatarSocket {
       return;
     }
 
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.manuallyClosed = false;
+
     console.log("[AvatarSocket] Connecting...");
+    this.notifyStatus("connecting");
 
     this.socket = new WebSocket(WS_URL);
     this.socket.binaryType = "arraybuffer";
 
     this.socket.onopen = () => {
       console.log("[AvatarSocket] Connected");
+      this.notifyStatus("connected");
       audioPlayer.resume().catch(() => {});
       // Synchronize active mode with server immediately upon connection
       this.setMode(this.currentMode.chat_input_enabled, this.currentMode.screen);
@@ -156,11 +198,13 @@ class AvatarSocket {
 
     this.socket.onerror = (err) => {
       console.error("[AvatarSocket] Socket error", err);
+      this.notifyStatus("disconnected");
     };
 
     this.socket.onclose = () => {
       console.warn("[AvatarSocket] Disconnected");
       this.socket = null;
+      this.notifyStatus("disconnected");
       if (!this.manuallyClosed) {
         this.scheduleReconnect();
       }
@@ -173,6 +217,7 @@ class AvatarSocket {
       window.clearTimeout(this.reconnectTimer);
     }
     this.socket?.close();
+    this.notifyStatus("disconnected");
   }
 
   send(data: unknown) {

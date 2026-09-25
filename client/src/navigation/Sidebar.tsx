@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   IconMenu2,
   IconSun,
@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import type { ScreenType } from "./types";
 import { useTheme } from "./ThemeContext";
+import { avatarSocket, type ConnectionStatus } from "../networking";
 import "./Sidebar.css";
 
 interface SidebarProps {
@@ -27,6 +28,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
 }) => {
   const { theme, setTheme } = useTheme();
+  const [serverStatus, setServerStatus] = useState<ConnectionStatus>(
+    avatarSocket.getConnectionStatus()
+  );
+
+  useEffect(() => {
+    const unsubscribe = avatarSocket.onStatusChange((status) => {
+      setServerStatus(status);
+    });
+    return unsubscribe;
+  }, []);
 
   return (
     <aside className={`app-sidebar ${!isOpen ? "collapsed" : ""}`} aria-label="Application Sidebar">
@@ -89,6 +100,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="sidebar-bottom">
+        {/* Server Connection Status Light */}
+        <button
+          type="button"
+          className={`sidebar-status-btn ${serverStatus}`}
+          title={
+            serverStatus === "connected"
+              ? "Server Connected (ws://127.0.0.1:8765)"
+              : serverStatus === "connecting"
+              ? "Connecting to server..."
+              : "Server Disconnected (Offline) — Click to reconnect"
+          }
+          aria-label={`Server status: ${serverStatus}`}
+          onClick={() => {
+            if (serverStatus !== "connected") {
+              avatarSocket.connect();
+            }
+          }}
+        >
+          <span className="sidebar-status-ping" />
+          <span className="sidebar-status-dot" />
+        </button>
+
         <div className="sidebar-theme-group" role="group" aria-label="Theme mode switcher">
           {/* Sun icon for light theme */}
           <button
