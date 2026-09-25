@@ -57,9 +57,11 @@ function formatTwoLines(text: string): { line1: string[]; line2: string[]; allWo
   };
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+interface SubtitleOverlayProps {
+  raised?: boolean;
+}
 
-export default function SubtitleOverlay() {
+export default function SubtitleOverlay({ raised = false }: SubtitleOverlayProps) {
   const { showSubtitles } = useControls("Subtitles", {
     showSubtitles: { value: true, label: "Enable Subtitles" },
   });
@@ -142,8 +144,9 @@ export default function SubtitleOverlay() {
       className="anime-subtitle-overlay"
       style={{
         ...styles.container,
+        bottom: raised ? "16%" : "8%",
         opacity,
-        transition: `opacity ${FADEOUT_MS}ms ease`,
+        transition: `opacity ${FADEOUT_MS}ms ease, bottom 0.25s ease`,
       }}
     >
       <div style={styles.textWrapper}>

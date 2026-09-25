@@ -3,13 +3,19 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Scene from "./components/scene";
 import SubtitleOverlay from "./components/SubtitleOverlay";
+import ChatInput from "./components/ChatInput";
 import { Leva } from "leva";
 import { audioPlayer } from "./audio/AudioPlayer";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { avatarEvents } from "./networking/EventBus";
+import { avatarSocket } from "./networking";
 
 
 export default function App() {
-  
+  const [chatInputEnabled, setChatInputEnabled] = useState(
+    () => avatarSocket.lastConfig?.chat_input_enabled ?? false
+  );
+
   useEffect(() => {
     const unlock = () => {
 
@@ -27,6 +33,19 @@ export default function App() {
       unlock,
     );
 
+  }, []);
+
+  // Listen for server config event (when server-side is ready)
+  useEffect(() => {
+    if (avatarSocket.lastConfig?.chat_input_enabled !== undefined) {
+      setChatInputEnabled(avatarSocket.lastConfig.chat_input_enabled);
+    }
+    const unsub = avatarEvents.subscribe("config" as any, (event: any) => {
+      if (typeof event.chat_input_enabled === "boolean") {
+        setChatInputEnabled(event.chat_input_enabled);
+      }
+    });
+    return unsub;
   }, []);
 
   return (
@@ -72,7 +91,9 @@ export default function App() {
         </Canvas>
       </div>
 
-      <SubtitleOverlay />
+      <SubtitleOverlay raised={chatInputEnabled} />
+
+      {chatInputEnabled && <ChatInput />}
     </>
   );
 }

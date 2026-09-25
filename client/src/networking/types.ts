@@ -74,6 +74,17 @@ export interface SpeechSegmentEvent {
   emotion?: string;
 }
 
+export interface ConfigEvent {
+  type: "config";
+  chat_input_enabled: boolean;
+}
+
+export interface TranscriptionEvent {
+  type: "transcription";
+  text: string;
+  is_final: boolean;
+}
+
 export type AvatarEvent =
   | TranscriptEvent
   | SpeechEvent
@@ -84,4 +95,6 @@ export type AvatarEvent =
   | SpeechStartEvent
   | SpeechEndEvent
   | SubtitleEvent
-  | SpeechSegmentEvent;
+  | SpeechSegmentEvent
+  | ConfigEvent
+  | TranscriptionEvent;

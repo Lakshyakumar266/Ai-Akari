@@ -9,4 +9,9 @@ ENABLE_SUBTITLES = True
 # "synced" -> Facial expression synchronizes per segment with audio playback and holds until speech finishes
 # "stream" -> Legacy behavior: dispatches emotion during token streaming
 # "off"    -> Disables emotion tags (stays Neutral)
-EMOTION_SYNC_MODE = "stream"
+EMOTION_SYNC_MODE = "synced"
+
+# Chat input mode:
+# True  -> Voice loop is disabled; user sends text/voice from the browser UI chat box
+# False -> Server-side microphone voice loop (current default behavior)
+ENABLE_CHAT_INPUT = True
