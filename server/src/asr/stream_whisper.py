@@ -13,7 +13,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 MODEL_CACHE_DIR = "E:/HuggingFace_Cache/faster-whisper"
-STREAMING_MODEL_NAME = "medium"
+STREAMING_MODEL_NAME = "small.en"
 
 # Exactly ONE model instance for all streaming operations
 _model: WhisperModel | None = None
