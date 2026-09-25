@@ -287,16 +287,32 @@ export default function ChatInput() {
 
   // ─── Track AI responding state ──────────────────────────────────────────
   useEffect(() => {
+    // 1. Primary event: when SpeechQueue has physically finished playing all audio segments
+    const unsubAllEnd = speechQueue.onAllSegmentsEnd(() => {
+      console.log("[ChatInput] SpeechQueue completed all segments -> stopping response icon");
+      setIsResponding(false);
+    });
+
+    // 2. Active server indicators keep response state on
     const unsubThinking = avatarEvents.subscribe("thinking_start" as any, () => {
       setIsResponding(true);
     });
     const unsubStart = avatarEvents.subscribe("speech_start", () => {
       setIsResponding(true);
     });
+
+    // 3. Fallback: only if speechQueue is completely inactive should a server speech_end event turn off responding
     const unsubEnd = avatarEvents.subscribe("speech_end", () => {
-      setIsResponding(false);
+      if (!speechQueue.active) {
+        console.log("[ChatInput] Inactive speech_end received -> stopping response icon");
+        setIsResponding(false);
+      } else {
+        console.log("[ChatInput] Retaining response icon: SpeechQueue is actively managing turn");
+      }
     });
+
     return () => {
+      unsubAllEnd();
       unsubThinking();
       unsubStart();
       unsubEnd();

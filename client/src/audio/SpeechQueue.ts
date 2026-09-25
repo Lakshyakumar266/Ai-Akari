@@ -1,12 +1,3 @@
-/**
- * SpeechQueue
- *
- * Manages sentence-level speech segments received from the server.
- * Plays each audio segment through AudioPlayer, and triggers exact callbacks
- * for subtitle synchronization so that subtitles stay on screen while their
- * audio is playing, and only advance when that segment's audio finishes.
- */
-
 import { audioPlayer } from "./AudioPlayer";
 import { avatarEvents } from "../networking/EventBus";
 import type { SpeechSegmentEvent } from "../networking/types";
@@ -44,7 +35,7 @@ export class SpeechQueue {
     this.isTurnActive = true;
     this.turnEndedByServer = false;
     // Safety fallback in case server drops connection or generates nothing
-    this.armFallbackTimer(20000);
+    this.armFallbackTimer(60000);
   }
 
   /**
@@ -233,3 +224,11 @@ export class SpeechQueue {
 }
 
 export const speechQueue = new SpeechQueue();
+
+/**
+ * SpeechQueue Architecture
+ * Manages sentence-level speech segments received from the server.
+ * Plays each audio segment through AudioPlayer, and triggers exact callbacks
+ * for subtitle synchronization so that subtitles stay on screen while their
+ * audio is playing, and only advance when that segment's audio finishes.
+ */
