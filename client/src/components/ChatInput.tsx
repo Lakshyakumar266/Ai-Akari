@@ -20,6 +20,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { IconMicrophone, IconPlayerStopFilled, IconArrowUp } from "@tabler/icons-react";
 import { avatarSocket } from "../networking";
 import { avatarEvents } from "../networking/EventBus";
+import { speechQueue } from "../audio/SpeechQueue";
 import "./ChatInput.css";
 
 const MAX_ROWS = 6;
@@ -51,7 +52,7 @@ export default function ChatInput() {
   useEffect(() => {
     isRespondingRef.current = isResponding;
     if (isResponding) {
-      if (sendBtnRef.current) sendBtnRef.current.disabled = true;
+      if (sendBtnRef.current) sendBtnRef.current.disabled = false;
       setCanSend(false);
     } else {
       const has = (textareaRef.current?.value.trim().length ?? 0) > 0;
@@ -100,7 +101,7 @@ export default function ChatInput() {
   const stopRecording = useCallback(() => {
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
-    audioContextRef.current?.close().catch(() => {});
+    audioContextRef.current?.close().catch(() => { });
     streamRef.current?.getTracks().forEach((t) => t.stop());
 
     processorRef.current = null;
@@ -179,19 +180,40 @@ export default function ChatInput() {
 
     console.log("[ChatInput] Sending message:", trimmed);
 
+    // Immediately start speech turn to keep the stop icon active throughout thinking, streaming, and audio
+    speechQueue.startTurn();
+
     avatarSocket.send({
       type: "chat_message",
       text: trimmed,
     });
 
     el.value = "";
-    if (sendBtnRef.current) {
-      sendBtnRef.current.disabled = true;
-    }
-    setCanSend(false);
     el.style.height = "auto";
-    el.focus();
+    setIsResponding(true);
+    isRespondingRef.current = true;
+    setCanSend(false);
+    if (sendBtnRef.current) {
+      sendBtnRef.current.disabled = false;
+    }
   }, [stopRecording]);
+
+  // ─── Stop AI response ──────────────────────────────────────────────────
+  const handleStop = useCallback(() => {
+    console.log("[ChatInput] Stopping response & stream...");
+    speechQueue.interrupt();
+    avatarSocket.send({ type: "interrupt" });
+    avatarSocket.sendBinary(new Uint8Array([3]).buffer);
+    setIsResponding(false);
+    isRespondingRef.current = false;
+
+    const has = (textareaRef.current?.value.trim().length ?? 0) > 0;
+    setCanSend(has);
+    if (sendBtnRef.current) {
+      sendBtnRef.current.disabled = !has;
+    }
+    textareaRef.current?.focus();
+  }, []);
 
   // ─── Input handler ──────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
@@ -199,14 +221,15 @@ export default function ChatInput() {
     if (!el) return;
 
     const has = el.value.trim().length > 0;
-    const nextCanSend = has && !isRespondingRef.current;
 
-    // Direct DOM property update for instant 0ms visual responsiveness
-    if (sendBtnRef.current && sendBtnRef.current.disabled !== !nextCanSend) {
-      sendBtnRef.current.disabled = !nextCanSend;
+    // Never modify button disabled state while AI response is active
+    if (!isRespondingRef.current) {
+      if (sendBtnRef.current && sendBtnRef.current.disabled !== !has) {
+        sendBtnRef.current.disabled = !has;
+      }
+      setCanSend((prev) => (prev !== has ? has : prev));
     }
 
-    setCanSend((prev) => (prev !== nextCanSend ? nextCanSend : prev));
     scheduleResize();
   }, [scheduleResize]);
 
@@ -219,7 +242,9 @@ export default function ChatInput() {
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        handleSend();
+        if (!isRespondingRef.current) {
+          handleSend();
+        }
       }
     },
     [handleSend]
@@ -244,9 +269,11 @@ export default function ChatInput() {
           el.value += word;
         }
 
-        const nextCanSend = el.value.trim().length > 0 && !isRespondingRef.current;
-        if (sendBtnRef.current) sendBtnRef.current.disabled = !nextCanSend;
-        setCanSend((prev) => (prev !== nextCanSend ? nextCanSend : prev));
+        if (!isRespondingRef.current) {
+          const nextCanSend = el.value.trim().length > 0;
+          if (sendBtnRef.current) sendBtnRef.current.disabled = !nextCanSend;
+          setCanSend((prev) => (prev !== nextCanSend ? nextCanSend : prev));
+        }
         scheduleResize();
       }
 
@@ -260,6 +287,9 @@ export default function ChatInput() {
 
   // ─── Track AI responding state ──────────────────────────────────────────
   useEffect(() => {
+    const unsubThinking = avatarEvents.subscribe("thinking_start" as any, () => {
+      setIsResponding(true);
+    });
     const unsubStart = avatarEvents.subscribe("speech_start", () => {
       setIsResponding(true);
     });
@@ -267,6 +297,7 @@ export default function ChatInput() {
       setIsResponding(false);
     });
     return () => {
+      unsubThinking();
       unsubStart();
       unsubEnd();
     };
@@ -278,7 +309,7 @@ export default function ChatInput() {
       if (audioContextRef.current) {
         processorRef.current?.disconnect();
         sourceRef.current?.disconnect();
-        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current.close().catch(() => { });
         streamRef.current?.getTracks().forEach((t) => t.stop());
       }
     };
@@ -320,12 +351,16 @@ export default function ChatInput() {
           <button
             ref={sendBtnRef}
             type="button"
-            className="chat-btn chat-btn-send"
-            onClick={handleSend}
-            disabled={!canSend}
-            aria-label="Send message"
+            className={`chat-btn ${isResponding ? "chat-btn-stop" : "chat-btn-send"}`}
+            onClick={isResponding ? handleStop : handleSend}
+            disabled={!isResponding && !canSend}
+            aria-label={isResponding ? "Stop response" : "Send message"}
           >
-            <IconArrowUp size={18} stroke={2} />
+            {isResponding ? (
+              <IconPlayerStopFilled size={14} />
+            ) : (
+              <IconArrowUp size={18} stroke={2} />
+            )}
           </button>
         </div>
       </div>

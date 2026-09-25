@@ -20,13 +20,49 @@ export class SpeechQueue {
   private queue: SpeechSegmentEvent[] = [];
   private isPlaying = false;
   private currentSegment: SpeechSegmentEvent | null = null;
+  private isTurnActive = false;
+  private turnEndedByServer = false;
+  private fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
   private onStartListeners = new Set<SegmentStartListener>();
   private onProgressListeners = new Set<SegmentProgressListener>();
   private onEndListeners = new Set<SegmentEndListener>();
   private onAllEndListeners = new Set<AllSegmentsEndListener>();
 
+  constructor() {
+    avatarEvents.subscribe("turn_end" as any, () => {
+      this.endTurn();
+    });
+  }
+
+  /**
+   * Signal that a dialogue turn has begun (e.g. user clicked send or speech was triggered).
+   * Keeps the responding/playing state active while waiting for server generation and audio chunks.
+   */
+  startTurn(): void {
+    this.clearFallbackTimer();
+    this.isTurnActive = true;
+    this.turnEndedByServer = false;
+    // Safety fallback in case server drops connection or generates nothing
+    this.armFallbackTimer(20000);
+  }
+
+  /**
+   * Signal that the server has finished sending all segments for this turn.
+   * If audio is already finished playing, concludes the turn immediately;
+   * otherwise lets playback finish gracefully.
+   */
+  endTurn(): void {
+    console.log("[SpeechQueue] endTurn received. isPlaying:", this.isPlaying, "queue:", this.queue.length);
+    this.turnEndedByServer = true;
+    if (!this.isPlaying && this.queue.length === 0) {
+      this.finishTurn();
+    }
+  }
+
   enqueue(segment: SpeechSegmentEvent): void {
+    this.clearFallbackTimer();
+    this.isTurnActive = true;
     this.queue.push(segment);
     if (!this.isPlaying) {
       this.playNext();
@@ -34,9 +70,12 @@ export class SpeechQueue {
   }
 
   interrupt(): void {
+    this.clearFallbackTimer();
     this.queue = [];
     this.isPlaying = false;
     this.currentSegment = null;
+    this.isTurnActive = false;
+    this.turnEndedByServer = false;
     audioPlayer.stop();
     this.notifyAllEnd();
   }
@@ -45,15 +84,34 @@ export class SpeechQueue {
     return this.currentSegment;
   }
 
+  get active(): boolean {
+    return this.isPlaying || this.isTurnActive || this.queue.length > 0;
+  }
+
+  private finishTurn(): void {
+    this.clearFallbackTimer();
+    this.isTurnActive = false;
+    this.turnEndedByServer = false;
+    this.isPlaying = false;
+    this.currentSegment = null;
+    this.notifyAllEnd();
+  }
+
   private playNext(): void {
     if (this.queue.length === 0) {
-      this.isPlaying = false;
-      this.currentSegment = null;
-      this.notifyAllEnd();
+      if (this.turnEndedByServer || !this.isTurnActive) {
+        this.finishTurn();
+      } else {
+        // Queue is temporarily drained between streaming sentence segments; wait for server
+        this.isPlaying = false;
+        this.currentSegment = null;
+        this.armFallbackTimer(10000);
+      }
       return;
     }
 
     const segment = this.queue.shift()!;
+    this.clearFallbackTimer();
     this.isPlaying = true;
     this.currentSegment = segment;
 
@@ -73,13 +131,34 @@ export class SpeechQueue {
         this.notifyEnd(segment);
         if (this.queue.length > 0) {
           this.playNext();
+        } else if (segment.is_last || this.turnEndedByServer || !this.isTurnActive) {
+          // Final segment audio playback has physically finished on hardware sound
+          this.finishTurn();
         } else {
+          // Current segment finished playing, waiting for next segment from server
           this.isPlaying = false;
           this.currentSegment = null;
-          this.notifyAllEnd();
+          this.armFallbackTimer(10000);
         }
       }
     );
+  }
+
+  private clearFallbackTimer(): void {
+    if (this.fallbackTimer !== null) {
+      clearTimeout(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+  }
+
+  private armFallbackTimer(ms: number): void {
+    this.clearFallbackTimer();
+    this.fallbackTimer = setTimeout(() => {
+      console.warn(`[SpeechQueue] Turn safety timer expired (${ms}ms). Concluding turn.`);
+      if (this.isTurnActive) {
+        this.finishTurn();
+      }
+    }, ms);
   }
 
   onSegmentStart(cb: SegmentStartListener): () => void {

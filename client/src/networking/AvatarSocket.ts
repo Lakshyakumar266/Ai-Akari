@@ -116,7 +116,9 @@ class AvatarSocket {
           this.lastConfig = event as ConfigEvent;
         } else if (event.type === "speech_segment") {
           speechQueue.enqueue(event as SpeechSegmentEvent);
-        } else if (event.type === "transcript") {
+        } else if (event.type === "turn_end") {
+          speechQueue.endTurn();
+        } else if ((event as any).type === "interrupt") {
           speechQueue.interrupt();
         }
 

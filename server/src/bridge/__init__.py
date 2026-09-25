@@ -11,6 +11,7 @@ from .events import (
     subtitle,
     speech_segment,
     transcription,
+    turn_end,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "subtitle",
     "speech_segment",
     "transcription",
+    "turn_end",
 ]

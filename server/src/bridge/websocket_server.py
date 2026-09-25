@@ -170,9 +170,17 @@ async def _handle_chat_message(data: dict):
     if not text:
         return
 
-    from src.chat.loop import process_chat_message
+    from src.chat.loop import (
+        process_chat_message,
+        stop_chat_stream,
+        set_active_chat_task,
+    )
 
-    await process_chat_message(text)
+    # Cancel previous stream if still generating/speaking
+    await stop_chat_stream()
+
+    task = asyncio.create_task(process_chat_message(text))
+    set_active_chat_task(task)
 
 
 async def client_handler(websocket: ServerConnection):
@@ -182,9 +190,11 @@ async def client_handler(websocket: ServerConnection):
     Binary frames:
       VOICE_CHUNK (0x10) + PCM_INT16_DATA  → streamed voice audio
       VOICE_END   (0x11)                    → recording stopped
+      AUDIO_INTERRUPT (0x03)                → stop response/stream
 
     JSON frames:
       chat_message  → { type: "chat_message", text: "..." }
+      interrupt     → { type: "interrupt" }
     """
 
     await broadcaster.register(websocket)
@@ -208,6 +218,12 @@ async def client_handler(websocket: ServerConnection):
                 elif packet_type == BinaryPacket.VOICE_END:
                     await _handle_voice_end(websocket)
 
+                elif packet_type == BinaryPacket.AUDIO_INTERRUPT:
+                    from src.chat.loop import stop_chat_stream
+
+                    print("[Bridge] Binary interrupt received from client.")
+                    await stop_chat_stream()
+
                 else:
                     print(f"[Bridge] Unknown binary packet from client: {packet_type}")
 
@@ -220,6 +236,11 @@ async def client_handler(websocket: ServerConnection):
 
                 if msg_type == "chat_message":
                     asyncio.create_task(_handle_chat_message(data))
+                elif msg_type in ("interrupt", "stop"):
+                    from src.chat.loop import stop_chat_stream
+
+                    print("[Bridge] JSON interrupt received from client.")
+                    await stop_chat_stream()
                 else:
                     print(f"[Bridge] Unknown message type: {msg_type}")
 
