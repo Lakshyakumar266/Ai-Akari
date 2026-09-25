@@ -103,3 +103,29 @@ The application guarantees that the URL search parameters always represent the a
    - `localStorage` (`akari_llm_provider`, `akari_llm_model`)
    - WebSocket backend via `avatarSocket.setLlmProvider(provider, model)`
 3. **Screen Switching**: When navigating between screens (e.g. Settings -> Characters -> Chat), `navigate(targetScreen)` preserves the active `provider` and `model` parameters in the URL.
+
+---
+
+## 6. Model Validation, Fallback Traps & Live Execution Guarantees
+
+### 6.1 The Silent Fallback Trap
+A critical issue was identified where setting a custom, experimental, or invalid model name (e.g. `model=rubbish`) still resulted in a successful response. Investigation revealed:
+1. **Model Filtering Guard in `provider.py`**:
+   `if model_id and any(m["id"] == model_id for m in matched["models"]): _active_model = model_id else: _active_model = matched["default_model"]`
+   Because `rubbish` was not in `matched["models"]`, the backend silently discarded it and reverted to `default_model` (`ministral-8b-latest` / `qwen7b`).
+2. **Early Connection Drop**:
+   `setLlmProvider()` sent during page mount while the WebSocket was still `CONNECTING` was lost because `readyState !== WebSocket.OPEN`.
+3. **Missing Message Parameters**:
+   `ChatInput.tsx` sent `{ type: "chat_message", text: "..." }` without attaching `provider` and `model`.
+
+### 6.2 The Three-Tier Execution Guarantee
+To guarantee that the exact model selected by the user is executed:
+1. **Unfiltered Model Acceptance in `provider.py`**:
+   `_active_model = model_id.strip()` is applied unconditionally. The backend never silently reverts to default if the user specified a model.
+2. **Connection Resend Queue in `AvatarSocket.ts`**:
+   `pendingLlmProvider` is persisted and re-sent immediately in `socket.onopen`.
+3. **Per-Message Model Binding**:
+   Every `chat_message` sent from `ChatInput.tsx` carries `{ provider, model }`. In `websocket_server.py`, `_handle_chat_message()` synchronizes `set_active_provider(provider, model)` before executing the stream.
+4. **Upstream API Validation Feedback**:
+   If an invalid model (e.g. `rubbish_test_123`) is queried, Mistral returns `Status 400: Invalid model: rubbish_test_123` and Free.ai returns `Status 400: not a chat model`. This error is captured and displayed directly in subtitles and console, providing 100% transparency.
+
