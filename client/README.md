@@ -1,88 +1,80 @@
-# Anime Wifu Client
+# AiAkari Client
 
-A 3D web viewer that renders **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*) as a VRM model, built with React, Vite, [Three.js](https://threejs.org/), and [@pixiv/three-vrm](https://github.com/pixiv/three-vrm).
+An interactive 3D web interface that renders **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*) as a VRM avatar, built with React, Vite, [Three.js](https://threejs.org/), and [@pixiv/three-vrm](https://github.com/pixiv/three-vrm).
 
-The scene runs in real time: the character blinks and breathes on her own, tracks the camera with her eyes, and can play `.vrma` animations or shift between facial expressions — all controllable live through a [Leva](https://github.com/pmndrs/leva) debug panel.
+The scene executes in real time: the avatar autonomously blinks and breathes, directs her gaze toward the camera, and smoothly blends `.vrma` animations and facial expressions—all configurable live through an interactive debug panel.
 
-## Features
+## Architecture & Controls
 
-- **VRM avatar** loaded from `public/character.vrm` via `@pixiv/three-vrm`
-- **Idle motion controllers** — blinking, breathing, and camera look-at run automatically every frame
-- **9 playable animations** — `Blush`, `Clapping`, `Jump`, `LookAround`, `Relax`, `Sad`, `Sleepy`, `Surprised`, `Thinking` (`.vrma` files in `public/animations/`), with cross-fading between clips
-- **6 facial expressions** — `Neutral`, `Happy`, `Sad`, `Angry`, `Relaxed`, `Surprised`, smoothly blended via the VRM expression manager
-- **Pose control** — relaxed standing pose with adjustable arm rotation (Leva "Pose" panel)
-- **Post-processing** — Bloom via `@react-three/postprocessing`, ACES filmic tone mapping
-- **OrbitControls** for a free camera around the character
+Every behavior is governed by modular controller classes invoked on each frame tick:
 
-## Requirements
+| Subsystem              | Responsibility                                  |
+|------------------------|-------------------------------------------------|
+| `AnimationController`  | Lazily loads and caches `.vrma` clips, handles cross-fading |
+| `BlinkController`      | Stochastic procedural blinking                  |
+| `BreathingController`  | Subtle rhythmic chest rotation                  |
+| `LookAtController`     | Directs eye and head gaze toward the active camera |
+| `LipSyncController`    | Synchronizes mouth morph targets via audio FFT and viseme mapping |
+| `EmotionController`    | Interpolates facial sentiment presets           |
+| `PoseController`       | Enforces relaxed, attention, or manual arm poses |
 
-- [Bun](https://bun.sh/) 1.x (or npm)
-- A modern browser with WebGL support
+## Core Features
 
-## Setup
+- **VRM 3D Avatar Engine** loaded via `@pixiv/three-vrm` with normalized humanoid rigging.
+- **Autonomous Lifelike Motions** — stochastic eye blinking, breathing oscillations, and continuous camera gaze tracking.
+- **Animation Track Library** — `.vrma` animation playback (`Blush`, `Clapping`, `Jump`, `LookAround`, `Relax`, `Sad`, `Sleepy`, `Surprised`, `Thinking`) with smooth cross-fading.
+- **Facial Blend-Shape System** — `Neutral`, `Happy`, `Sad`, `Angry`, `Relaxed`, and `Surprised` presets.
+- **Procedural Posing** — natural resting stance with configurable shoulder and arm drape.
+- **Post-Processing & Rendering** — ACES filmic tone mapping and subtle bloom via `@react-three/postprocessing`.
+- **Free Camera Controls** — full orbit, pan, and zoom around the avatar.
+
+## Environment Requirements
+
+- [Bun](https://bun.sh/) 1.x or [Node.js](https://nodejs.org/) (npm / pnpm)
+- Modern web browser with WebGL2 support
+
+## Getting Started
 
 ```bash
+# Install dependencies
 bun install
+
+# Launch development server
 bun run dev
 ```
 
-Open the printed URL (default `http://localhost:5173`).
+Visit the local development server at `http://localhost:5173`.
 
-## Scripts
+## Available Scripts
 
-| Command             | Description                          |
+| Command             | Purpose                              |
 |---------------------|--------------------------------------|
-| `bun run dev`       | Start the Vite dev server with HMR   |
-| `bun run build`     | Type-check with `tsc` and build      |
-| `bun run lint`      | Lint with oxlint                     |
-| `bun run preview`   | Preview the production build         |
+| `bun run dev`       | Start Vite local development server with HMR |
+| `bun run build`     | Validate types (`tsc`) and compile production bundle |
+| `bun run lint`      | Execute oxlint diagnostics           |
+| `bun run preview`   | Serve built production artifacts     |
 
-## Using the debug panel
-
-The Leva panel on the right exposes three tabs:
-
-- **Animation** — pick an animation to play, or `None` to return to the relaxed pose
-- **Emotion** — switch the facial expression; transitions are smoothed
-- **Pose** — tune the shoulder/arm angles of the relaxed pose
-
-You can also drag to orbit, right-drag to pan, and scroll to zoom (distance is clamped to `1.2–3`).
-
-## Project layout
+## Project Structure
 
 ```
 client/
 ├── public/
-│   ├── character.vrm         # The Akari VRM model
+│   ├── character.vrm         # Default Akari VRM model
 │   ├── favicon.svg
-│   └── animations/           # .vrma animation clips
+│   └── animations/           # .vrma motion clips
 └── src/
-    ├── App.tsx               # Canvas, camera, OrbitControls, Leva
+    ├── App.tsx               # Primary canvas viewport & navigation host
     ├── components/
-    │   ├── scene.tsx         # Lights, environment, bloom, <Character />
-    │   ├── loader.tsx        # "Loading Character..." fallback
+    │   ├── scene.tsx         # Lighting, environment map, bloom post-processing
+    │   ├── loader.tsx        # Fallback loading indicator
     │   └── character/
-    │       ├── Character.tsx # Avatar load + per-frame controller update
+    │       ├── Character.tsx # Avatar lifecycle & render loop coordinator
     │       ├── AvatarLoader.ts
     │       ├── AvatarContext.ts
-    │       ├── types.ts      # ANIMATIONS, EMOTIONS, visemes, DEFAULT_VRM_URL
-    │       └── *Controller.ts# animation, blink, breathing, emotion,
-    │                        #   lip-sync, look-at, pose
+    │       ├── types.ts      # Animation, emotion, and character manifests
+    │       └── *Controller.ts# Procedural animation controllers
 ```
 
-## Controls architecture
-
-Every behavior is a small controller class updated each frame from `Character.tsx`:
-
-| Controller             | Responsibility                                  |
-|------------------------|-------------------------------------------------|
-| `AnimationController`  | Loads/lazily caches `.vrma` clips, cross-fades   |
-| `BlinkController`      | Randomized periodic blinking                     |
-| `BreathingController`  | Subtle chest rotation                            |
-| `LookAtController`     | Tracks the camera position                       |
-| `LipSyncController`    | Maps viseme weights to expression values         |
-| `EmotionController`    | Lerps expression presets towards a target        |
-| `PoseController`       | Relaxed / attention / procedural arm poses       |
-
-## Tech stack
+## Technology Stack
 
 React 19, TypeScript, Vite 8, Three.js, `@pixiv/three-vrm` + `@pixiv/three-vrm-animation`, `@react-three/fiber`, `@react-three/drei`, `@react-three/postprocessing`, Tailwind CSS 4, Leva, oxlint.

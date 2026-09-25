@@ -1,4 +1,4 @@
-# Anime Wife Companion
+# AiAkari Core Server
 
 A local voice companion that lets you talk with **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*). Your speech is transcribed on-device, replies are streamed from Mistral with a character system prompt, and Fish Audio speaks the response back—often before the full text is finished.
 
