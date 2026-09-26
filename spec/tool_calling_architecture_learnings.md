@@ -234,6 +234,76 @@ When tool execution concludes, `tool_end` clears the status pill smoothly as spo
    - Because the backend server may run locally, in a remote Docker container, or in the cloud, resolving "local time" by server system clock alone causes discrepancies if the user is in a different timezone. The browser resolves its exact IANA timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) and dispatches it in each `chat_message` over WebSocket. The backend sets client context so queries like *"what time is it in my timezone?"* or *"what is the time here?"* always match the user's physical environment.
 3. **Safe AST Evaluation vs. Arbitrary Code Execution**:
    - For mathematical calculations, LLMs frequently make simple arithmetic and percentage calculation errors. Rather than invoking dangerous Python `eval()` or `exec()`, the `calculate` tool uses Python's `ast` parser to strictly evaluate mathematical expression nodes with safe operators and white-listed math functions.
-4. **Explicit Tool Prompt Grounding**:
-   - Instruction-tuned LLMs often exhibit an "overconfidence bias", preferring to guess or invent times rather than triggering tool calls unless system prompts explicitly instruct them that tools must be used for time, date, time differences, and numerical calculations. Grounding the system prompt in `./server/src/prompts/system_prompt_akari.py` ensures consistent, deterministic tool invocations.
+4. **Unbloated Prompt Design via API Schemas**:
+   - Manually enumerating all tool signatures, argument definitions, and descriptions inside the system prompt causes prompt bloat, increases input token costs, and creates synchronization drift when tools change. Modern models (Mistral, Qwen, OpenAI) receive the exact JSON schema in the API `tools` array. The system prompt only requires concise behavioral instructions and a discovery tool (`get_available_tools`).
+
+---
+
+## 9. Unbloated System Prompt & Dynamic Tool Discovery Architecture
+
+### 9.1 The Bloat Anti-Pattern
+Listing every tool with its parameters, types, and descriptions in the `SYSTEM_PROMPT` creates duplicate schema overhead:
+```text
+System Prompt (Bloated: ~350 tokens) ──► Explains get_current_time, get_timezone_info, etc.
+API `tools` parameter (Native JSON)  ──► Explains get_current_time, get_timezone_info, etc.
+```
+
+### 9.2 The Clean Architecture Pattern
+1. **Lean System Prompt** (`./server/src/prompts/system_prompt_akari.py`):
+   ```text
+   REAL-TIME TOOLS & USER CONTEXT:
+   - You have real-time access to external tools via native function calling.
+   - When {{user}} asks about the current time or date without specifying another city, always report {{user}}'s local time and date by default.
+   - Never guess or hallucinate real-time facts, timezones, or math calculations; always invoke the appropriate tool.
+   - You can call get_available_tools at any time to inspect all available tools and capabilities.
+   - After receiving tool results, respond naturally in your Tsundere gyaru persona using the 6 allowed emotion tags. Never recite raw JSON, function names, or code.
+   ```
+2. **Dynamic Tool Discovery (`get_available_tools`)**:
+   - If the user or model ever queries *"What can you do?"* or *"What tools do you have?"*, the model invokes `get_available_tools()`.
+   - The tool dynamically inspects the active catalog in `./server/src/tools/builtins.py` and returns names, display titles, and summaries in real-time.
+
+---
+
+## 10. Understanding `max_rounds per turn` (Safety Guardrail)
+
+### 10.1 What is `max_rounds`?
+In conversational tool calling, a single user message ("turn") can trigger **multiple sequential tool rounds**:
+```text
+Turn Start (User: "What's the time in Tokyo, and how many hours is it ahead of London?")
+   Round 1: Model calls get_current_time(location="Tokyo")
+   Round 1 Output: {"time": "8:40 PM", "utc_offset": "+09:00"}
+   Round 2: Model calls time_difference(location_a="London", location_b="Tokyo")
+   Round 2 Output: {"difference_hours": 8.0}
+   Round 3: Model synthesizes both results and outputs spoken response.
+Turn Complete.
+```
+
+### 10.2 Why is it Necessary?
+1. **Runaway / Infinite Loop Prevention**: Without a bound, a confused or hallucinating model could invoke tools in an infinite loop (`get_current_time` $\to$ `get_current_time` $\to$ ...), consuming infinite API credits and hanging the user's audio output.
+2. **Bound Enforcement**:
+   - Configured in `./server/src/config.py`: `MAX_TOOL_CALL_ROUNDS = 5`.
+   - When the round counter reaches 5, the tool loop halts and forces the model to synthesize a conversational answer with the data collected so far.
+   - If an error occurs, it is returned cleanly within the iteration bounds.
+
+---
+
+## 11. Default User Location-Specific Time & Date Resolution
+
+### 11.1 Behavioral Rule
+Whenever {{user}} asks:
+- *"What time is it?"*
+- *"What's the date today?"*
+- *"What day is it?"*
+- *"What is my timezone?"*
+
+Without specifying an external city or country, the system **strictly defaults to the user's location**:
+1. Client browser resolves `Intl.DateTimeFormat().resolvedOptions().timeZone` (e.g. `Asia/Kolkata`).
+2. Client sends `timezone` in `chat_message` over WebSocket.
+3. Backend records client context via `set_client_timezone()`.
+4. `get_current_time()` and `get_current_date()` detect that no location was requested, resolve against the user's IANA timezone, and tag the response with:
+   - `"is_user_local_time": true`
+   - `"location": "User's Local Time (Kolkata, Asia)"`
+   - `"instruction": "This is the user's specific local time and date. Answer with this time directly."`
+5. Akari speaks the exact local time directly without claiming she is in a different timezone or assuming Tokyo/UTC.
+
 

@@ -295,17 +295,26 @@ def resolve_timezone(location_query: str | None) -> tuple[datetime.tzinfo, str, 
         # Check if client browser provided an explicit IANA timezone
         if _client_timezone:
             try:
+                # Format friendly city/region name from IANA timezone (e.g. Asia/Kolkata -> Kolkata / India)
+                tz_parts = _client_timezone.split("/")
+                city_name = tz_parts[-1].replace("_", " ") if len(tz_parts) > 1 else _client_timezone
+                region_name = tz_parts[0].replace("_", " ") if len(tz_parts) > 1 else ""
+                display_label = (
+                    f"User's Local Time ({city_name}, {region_name})"
+                    if region_name
+                    else f"User's Local Time ({city_name})"
+                )
                 return (
                     ZoneInfo(_client_timezone),
                     _client_timezone,
-                    f"User Local ({_client_timezone})",
+                    display_label,
                 )
             except Exception:
                 pass
 
         now_local = datetime.datetime.now().astimezone()
         tz_name = now_local.tzname() or "Local"
-        return now_local.tzinfo, tz_name, "Local System Time"
+        return now_local.tzinfo, tz_name, "User's Local Time"
 
     clean = location_query.strip().lower()
 
@@ -357,7 +366,7 @@ def get_current_time(
 ) -> dict[str, Any]:
     """
     Returns current time and date for any requested city, country, or timezone worldwide.
-    If no location is provided, returns current local/user time.
+    If no location is provided, returns current user's local time and date by default.
     """
     target = location or timezone
     tz, tz_identifier, display_name = resolve_timezone(target)
@@ -367,9 +376,19 @@ def get_current_time(
         f"UTC{offset_str[:3]}:{offset_str[3:]}" if len(offset_str) >= 5 else offset_str
     )
 
+    is_user_local = (
+        not target
+        or target.strip().lower() in {
+            "", "local", "here", "my timezone", "my location", "user",
+            "user timezone", "default", "me", "current", "system",
+            "current time", "current location", "now"
+        }
+    )
+
     return {
         "status": "success",
         "location": display_name,
+        "is_user_local_time": is_user_local,
         "time_12h": now.strftime("%I:%M %p").lstrip("0"),
         "time_24h": now.strftime("%H:%M:%S"),
         "date": now.strftime("%A, %B %d, %Y"),
@@ -380,6 +399,11 @@ def get_current_time(
         "is_evening": 17 <= now.hour < 21,
         "is_night": now.hour >= 21 or now.hour < 5,
         "iso_timestamp": now.isoformat(),
+        "instruction": (
+            "This is the user's specific local time and date. Answer with this time directly."
+            if is_user_local
+            else f"This is the current time in {display_name}."
+        ),
     }
 
 
@@ -422,14 +446,25 @@ def get_current_date(
 ) -> dict[str, Any]:
     """
     Returns current calendar date, day of week, month, year, and day of year for any timezone.
+    If no location is provided, defaults to the user's local date.
     """
     target = location or timezone
     tz, tz_identifier, display_name = resolve_timezone(target)
     now = datetime.datetime.now(tz)
 
+    is_user_local = (
+        not target
+        or target.strip().lower() in {
+            "", "local", "here", "my timezone", "my location", "user",
+            "user timezone", "default", "me", "current", "system",
+            "current time", "current location", "now"
+        }
+    )
+
     return {
         "status": "success",
         "location": display_name,
+        "is_user_local_date": is_user_local,
         "day_of_week": now.strftime("%A"),
         "formatted_date": now.strftime("%A, %B %d, %Y"),
         "month": now.strftime("%B"),
@@ -439,6 +474,11 @@ def get_current_date(
         "is_weekend": now.weekday() >= 5,
         "timezone": now.strftime("%Z") or tz_identifier,
         "iso_date": now.date().isoformat(),
+        "instruction": (
+            "This is the user's specific local date today. Answer with this date directly."
+            if is_user_local
+            else f"This is the current date in {display_name}."
+        ),
     }
 
 
@@ -744,9 +784,42 @@ def get_system_status() -> dict[str, Any]:
     }
 
 
+def get_available_tools() -> dict[str, Any]:
+    """
+    Returns a catalog of all currently enabled and registered tools with their purposes and usage instructions.
+    Invoke this whenever you need to check which tools or capabilities are available to assist {{user}}.
+    """
+    tools_summary = []
+    for tool in BUILTIN_TOOLS:
+        if tool.enabled:
+            tools_summary.append({
+                "name": tool.name,
+                "display_name": tool.user_friendly_name,
+                "description": tool.description,
+            })
+    return {
+        "status": "success",
+        "total_tools": len(tools_summary),
+        "available_tools": tools_summary,
+        "note": "Call any of these tools by name with the appropriate arguments to retrieve real-time data.",
+    }
+
+
 # ─── Registered Tool Catalog ──────────────────────────────────────────────────
 
 BUILTIN_TOOLS: list[Tool] = [
+    Tool(
+        name="get_available_tools",
+        user_friendly_name="Available Tools",
+        description="Returns a complete list of all currently available tools, capabilities, and descriptions. Invoke this to discover what real-time tools you can use.",
+        parameters={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        func=get_available_tools,
+        enabled=True,
+    ),
     Tool(
         name="get_current_time",
         user_friendly_name="Current Time",

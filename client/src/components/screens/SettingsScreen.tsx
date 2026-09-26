@@ -384,10 +384,36 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             {/* Available Tools Grid */}
             <div className="available-tools-header">
               <span className="available-tools-title">Available Tools</span>
-              <span className="available-tools-limit">Max: 5 rounds / turn</span>
+              <span
+                className="available-tools-limit"
+                title="Safety limit: Maximum number of sequential tool execution iterations permitted within a single user message turn to prevent runaway loops."
+              >
+                Max: 5 rounds / turn
+              </span>
             </div>
 
             <div className="available-tools-grid">
+              <div
+                className={`tool-item-card ${
+                  isCurrentModelToolSupported && toolsEnabled ? "active" : "dormant"
+                }`}
+              >
+                <div className="tool-item-icon-box">
+                  <IconTools size={16} />
+                </div>
+                <div className="tool-item-info">
+                  <div className="tool-item-name-row">
+                    <span className="tool-item-name">Tool Discovery</span>
+                    <span className="tool-item-status">
+                      {isCurrentModelToolSupported && toolsEnabled ? "Ready" : "Inactive"}
+                    </span>
+                  </div>
+                  <span className="tool-item-desc">
+                    Allows model to dynamically list and inspect all capabilities
+                  </span>
+                </div>
+              </div>
+
               <div
                 className={`tool-item-card ${
                   isCurrentModelToolSupported && toolsEnabled ? "active" : "dormant"
