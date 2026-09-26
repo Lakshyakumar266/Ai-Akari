@@ -75,7 +75,6 @@ async def set_chat_input_enabled(enabled: bool):
 SAMPLE_RATE = 16000
 INTERIM_INTERVAL = 0.5  # seconds between interim transcription runs
 
-
 class VoiceSession:
     """Accumulates streamed PCM chunks and sends word-by-word live transcription."""
 
