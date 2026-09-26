@@ -1,0 +1,299 @@
+"""
+OpenRouter LLM Provider
+-----------------------
+Integration for OpenRouter API (https://openrouter.ai/api/v1) supporting
+free models with full tool calling (function calling) and streaming completions.
+
+API Key from environment: OPENROUTER_APIKEY (or OPENROUTER_API_KEY)
+"""
+
+import os
+import json
+import asyncio
+import threading
+from typing import Generator, Callable
+from dotenv import load_dotenv
+from openai import OpenAI
+
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.tools import tool_registry
+
+load_dotenv()
+
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "openrouter/free"
+VALID_EMOTIONS = {"Happy", "Sad", "Angry", "Surprised", "Relaxed", "Neutral"}
+
+
+def get_openrouter_credentials() -> tuple[str, str]:
+    """Retrieves API key and base URL for OpenRouter."""
+    key = os.getenv("OPENROUTER_APIKEY") or os.getenv("OPENROUTER_API_KEY") or ""
+    base_url = os.getenv("OPENROUTER_BASE_URL") or DEFAULT_BASE_URL
+    return key, base_url
+
+
+def get_client() -> OpenAI:
+    """Creates an OpenAI client configured for OpenRouter."""
+    key, base_url = get_openrouter_credentials()
+    if not key:
+        print("[OpenRouter] Warning: OPENROUTER_APIKEY is not set in environment.")
+    return OpenAI(
+        base_url=base_url,
+        api_key=key or "none",
+        timeout=45.0,
+        default_headers={
+            "HTTP-Referer": "https://github.com/Lakshyakumar266/AkariWatanabe-companion",
+            "X-Title": "Akari Watanabe Companion",
+        },
+    )
+
+
+def _format_messages(prompt: str, history: list) -> list[dict]:
+    """Converts mixed history items (Mistral UserMessage/AssistantMessage or dicts) into standard OpenAI format."""
+    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
+
+    for item in history:
+        if isinstance(item, dict):
+            messages.append({
+                "role": item.get("role", "user"),
+                "content": item.get("content", ""),
+            })
+        elif hasattr(item, "content"):
+            class_name = item.__class__.__name__.lower()
+            role = "assistant" if "assistant" in class_name else "user"
+            messages.append({"role": role, "content": item.content or ""})
+
+    messages.append({"role": "user", "content": prompt})
+    return messages
+
+
+def classic_chat(prompt: str, history: list, model: str = DEFAULT_MODEL) -> str:
+    """Non-streaming chat completion using OpenRouter API."""
+    messages = _format_messages(prompt, history)
+    chosen_model = model or DEFAULT_MODEL
+    client = get_client()
+
+    try:
+        resp = client.chat.completions.create(
+            model=chosen_model,
+            messages=messages,
+            temperature=0.9,
+        )
+        return resp.choices[0].message.content or ""
+    except Exception as err:
+        print(f"[OpenRouter] Request error with model '{chosen_model}': {err}")
+        return f"[OpenRouter Notice: Request failed: {err}]"
+
+
+def stream_chat(
+    prompt: str,
+    history: list,
+    model: str = DEFAULT_MODEL,
+    tools_enabled: bool = False,
+    max_tool_rounds: int = 5,
+    on_tool_activity: Callable[[str, str], None] | None = None,
+    cancel_event: threading.Event | None = None,
+) -> Generator[str, None, None]:
+    """Yields text tokens as OpenRouter generates them in real-time, with multi-round tool calling support."""
+    messages = _format_messages(prompt, history)
+    chosen_model = model or DEFAULT_MODEL
+    print(
+        f"[OpenRouter] stream_chat starting with model: '{chosen_model}' (tools_enabled={tools_enabled})"
+    )
+
+    client = get_client()
+
+    if not tools_enabled:
+        # Standard streaming without tool calling
+        try:
+            stream = client.chat.completions.create(
+                model=chosen_model,
+                messages=messages,
+                temperature=0.9,
+                stream=True,
+            )
+            for chunk in stream:
+                if cancel_event is not None and cancel_event.is_set():
+                    return
+                if chunk.choices and chunk.choices[0].delta:
+                    delta_content = chunk.choices[0].delta.content
+                    if delta_content:
+                        yield delta_content
+        except Exception as err:
+            print(f"[OpenRouter] Stream error with model '{chosen_model}': {err}")
+            yield f"[OpenRouter Error: Model '{chosen_model}' failed: {err}]"
+        return
+
+    # Tool calling enabled path
+    tools = tool_registry.get_tool_definitions(only_enabled=True)
+    if not tools:
+        # Fallback to direct stream if no tools enabled
+        try:
+            stream = client.chat.completions.create(
+                model=chosen_model,
+                messages=messages,
+                temperature=0.9,
+                stream=True,
+            )
+            for chunk in stream:
+                if cancel_event is not None and cancel_event.is_set():
+                    return
+                if chunk.choices and chunk.choices[0].delta:
+                    delta_content = chunk.choices[0].delta.content
+                    if delta_content:
+                        yield delta_content
+        except Exception as err:
+            print(f"[OpenRouter] Fallback stream error: {err}")
+            yield f"[OpenRouter Error: {err}]"
+        return
+
+    current_round = 0
+
+    while current_round < max_tool_rounds:
+        current_round += 1
+        if cancel_event is not None and cancel_event.is_set():
+            return
+
+        try:
+            stream = client.chat.completions.create(
+                model=chosen_model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.7,
+                stream=True,
+            )
+        except Exception as err:
+            print(f"[OpenRouter] Tool stream error with model '{chosen_model}': {err}")
+            yield f"[OpenRouter Error: Model '{chosen_model}' failed: {err}]"
+            return
+
+        tool_calls_dict: dict[int, dict] = {}
+        round_content_chunks: list[str] = []
+
+        try:
+            for chunk in stream:
+                if cancel_event is not None and cancel_event.is_set():
+                    return
+
+                if not chunk.choices:
+                    continue
+
+                choice = chunk.choices[0]
+                if choice.delta.tool_calls:
+                    for tc in choice.delta.tool_calls:
+                        idx = tc.index if tc.index is not None else len(tool_calls_dict)
+                        if idx not in tool_calls_dict:
+                            tool_calls_dict[idx] = {
+                                "id": tc.id or f"tc_{idx}",
+                                "name": tc.function.name if tc.function else "",
+                                "arguments": (
+                                    tc.function.arguments or "" if tc.function else ""
+                                ),
+                            }
+                        else:
+                            if tc.id:
+                                tool_calls_dict[idx]["id"] = tc.id
+                            if tc.function and tc.function.name:
+                                tool_calls_dict[idx]["name"] = tc.function.name
+                            if tc.function and tc.function.arguments:
+                                tool_calls_dict[idx]["arguments"] += tc.function.arguments
+
+                if choice.delta.content:
+                    round_content_chunks.append(choice.delta.content)
+        except Exception as err:
+            print(f"[OpenRouter] Stream chunk iteration error with model '{chosen_model}': {err}")
+            yield f"[OpenRouter Error: Stream interrupted: {err}]"
+            return
+
+        # If no tool calls were requested, this is the final conversational response
+        if not tool_calls_dict:
+            for c in round_content_chunks:
+                yield c
+            break
+
+        # If a tool call was requested, isolate intermediate filler from TTS speech:
+        # Append assistant message with tool_calls
+        assistant_tool_calls = [
+            {
+                "id": t["id"],
+                "type": "function",
+                "function": {"name": t["name"], "arguments": t["arguments"]},
+            }
+            for t in tool_calls_dict.values()
+        ]
+        accumulated_text = "".join(round_content_chunks).strip()
+        messages.append({
+            "role": "assistant",
+            "content": accumulated_text if accumulated_text else None,
+            "tool_calls": assistant_tool_calls,
+        })
+
+        # Execute each tool call and append tool output message
+        for t in tool_calls_dict.values():
+            if cancel_event is not None and cancel_event.is_set():
+                return
+
+            t_name = t["name"]
+            t_args = t["arguments"]
+            t_id = t["id"]
+
+            if on_tool_activity:
+                try:
+                    on_tool_activity(t_name, "start")
+                except Exception:
+                    pass
+
+            print(f"[OpenRouter Tool] Executing '{t_name}' (args: {t_args})")
+            try:
+                loop = asyncio.new_event_loop()
+                result = loop.run_until_complete(
+                    tool_registry.execute_tool(t_name, t_args, timeout=10.0)
+                )
+                loop.close()
+            except Exception as e:
+                result = {"status": "error", "error": str(e)}
+
+            print(f"[OpenRouter Tool] Executed '{t_name}' -> {result}")
+
+            if on_tool_activity:
+                try:
+                    on_tool_activity(t_name, "end")
+                except Exception:
+                    pass
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": t_id,
+                "name": t_name,
+                "content": json.dumps(result),
+            })
+
+
+def classify_emotion(text: str, model: str = DEFAULT_MODEL) -> str:
+    """Classifies spoken response text into VRM emotion presets using OpenRouter LLM."""
+    if not text or not text.strip():
+        return "Neutral"
+
+    try:
+        client = get_client()
+        prompt = (
+            f"Analyze the character's speech and classify its primary emotion into EXACTLY ONE of these categories: "
+            f"Happy, Sad, Angry, Surprised, Relaxed, Neutral.\n\n"
+            f'Speech text: "{text}"\n\n'
+            f"Respond ONLY with the single category word."
+        )
+        resp = client.chat.completions.create(
+            model=model or DEFAULT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=10,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        for emotion_name in VALID_EMOTIONS:
+            if emotion_name.lower() in raw.lower():
+                return emotion_name
+    except Exception as err:
+        print(f"[OpenRouter Emotion] Error classifying emotion: {err}")
+
+    return "Neutral"

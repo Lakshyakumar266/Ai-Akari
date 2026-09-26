@@ -10,7 +10,9 @@ const DEFAULT_MODEL = "ministral-8b-latest";
 const DEFAULT_TOOLS = true;
 
 function getDefaultModelForProvider(provider: string): string {
-  return provider === "freeai" ? "qwen7b" : "ministral-8b-latest";
+  if (provider === "freeai") return "qwen7b";
+  if (provider === "openrouter") return "openrouter/free";
+  return "ministral-8b-latest";
 }
 
 function parseLocation(): NavigationState {
@@ -39,7 +41,7 @@ function parseLocation(): NavigationState {
     ? rawCharacter.trim()
     : DEFAULT_CHARACTER;
 
-  const provider = rawProvider && (rawProvider === "freeai" || rawProvider === "mistral")
+  const provider = rawProvider && (rawProvider === "freeai" || rawProvider === "mistral" || rawProvider === "openrouter")
     ? rawProvider
     : (localStorage.getItem("akari_llm_provider") || DEFAULT_PROVIDER);
 

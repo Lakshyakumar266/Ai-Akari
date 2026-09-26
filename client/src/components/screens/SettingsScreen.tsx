@@ -36,7 +36,7 @@ interface ModelDetail {
 }
 
 interface ProviderDetail {
-  id: "mistral" | "freeai";
+  id: "mistral" | "freeai" | "openrouter";
   name: string;
   badge: string;
   toolCallingSupported: boolean;
@@ -109,6 +109,56 @@ const PROVIDERS: ProviderDetail[] = [
       },
     ],
   },
+  {
+    id: "openrouter",
+    name: "OpenRouter (Free)",
+    badge: "Free Tier",
+    toolCallingSupported: true,
+    models: [
+      {
+        id: "openrouter/free",
+        name: "Free Models Router",
+        badge: "Auto (Recommended)",
+        context: "200k context",
+        toolCallingSupported: true,
+      },
+      {
+        id: "inclusionai/ling-3.0-flash-sante:free",
+        name: "Ling 3.0 Flash",
+        badge: "Fast",
+        context: "262k context",
+        toolCallingSupported: true,
+      },
+      {
+        id: "liquid/lfm-2.5-2.6b:free",
+        name: "Liquid LFM 2.5",
+        badge: "Lightweight",
+        context: "65k context",
+        toolCallingSupported: true,
+      },
+      {
+        id: "stealth/space-bunny-alpha",
+        name: "Space Bunny Alpha",
+        badge: "1M Context",
+        context: "1M context",
+        toolCallingSupported: true,
+      },
+      {
+        id: "poolside/laguna-s-2.1:free",
+        name: "Laguna S 2.1",
+        badge: "Reasoning",
+        context: "262k context",
+        toolCallingSupported: true,
+      },
+      {
+        id: "qwen/qwen3.8-27b:free",
+        name: "Qwen 3.8 27B",
+        badge: "Multilingual",
+        context: "262k context",
+        toolCallingSupported: true,
+      },
+    ],
+  },
 ];
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -167,7 +217,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const isCurrentModelToolSupported = activeModelDetail?.toolCallingSupported ?? false;
 
-  const handleSelectProvider = (newProviderId: "mistral" | "freeai") => {
+  const handleSelectProvider = (newProviderId: "mistral" | "freeai" | "openrouter") => {
     if (newProviderId === provider) return;
     const targetProviderObj = PROVIDERS.find((p) => p.id === newProviderId)!;
     const defaultModelObj = targetProviderObj.models[0];
