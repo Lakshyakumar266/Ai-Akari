@@ -43,8 +43,20 @@ In `./server/src/llm/freeai_model.py`, streaming is parsed directly from `resp.i
 
 ### 2.3 Token Billing & Premium Quota Handling
 - **Daily Free Pool**: Accounts receive 30,000 tokens/day for self-hosted models (`qwen7b`, `qwen3-8b`, `mistral`, `deepseek-r1`).
+- **Quota Depletion Status Codes**:
+  - `Status 402 {"error":"No tokens remaining..."}`: Emitted when an account's API key exhausts its daily token allowance.
+  - `Status 429 {"error":"Daily limit reached"}`: Emitted when an unauthenticated/anonymous IP exceeds its daily requests.
 - **External Frontier Models**: Models like `qwen/qwen3.6-35b-a3b` utilize paid upstream providers and require token balance. If invoked without purchased credits, the endpoint returns a `429 premium_requires_purchase` status.
 - **Defensive Error Handling**: Instead of throwing unhandled exceptions that break the WebSocket loop, `./server/src/llm/freeai_model.py` intercepts non-200 responses and yields a user-facing explanation (`[Free.ai Error: ...]`).
+
+### 2.4 Function Calling / Tool Calling Mechanics on Free.ai
+1. **OpenAI SDK Route (`POST /v1/chat/completions`)**:
+   - Native JSON schema function calling is supported on self-hosted models (`qwen7b`, `qwen3-8b`).
+   - **`tool_choice="auto"` Requirement**: Must be explicitly supplied in `client.chat.completions.create()`. Without it, vLLM's chat template may default to `none` or fail to emit tool calling tokens for roleplay prompts.
+   - **Temperature Tuning**: Set `temperature=0.7` for tool-decision phases. A high temperature (e.g. `0.9`) encourages 7B models to emit conversational excuses (*"Wait a sec, I'll check..."*) instead of function calls.
+   - **Intermediate Filler Suppression**: When the model outputs both content chunks and a tool call in round 1, intermediate speech must be suppressed from TTS and subtitles. Only the round 2 response incorporating actual tool results is vocalized.
+   - **Finish Reason Agnosticism**: Break conditions must inspect `if not tool_calls_dict: break` rather than strictly checking `finish_reason == "tool_calls"`, as gateways can stream tool call deltas while concluding with `finish_reason: "stop"` or `None`.
+   - **Fallback Streaming**: If all tools are disabled or tool definitions are empty, the handler automatically falls back to standard SSE streaming.
 
 ---
 

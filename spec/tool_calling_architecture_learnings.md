@@ -181,7 +181,21 @@ In `./server/src/llm/mistral_model.py`:
    - `AssistantMessage(content="", tool_calls=...)` and `ToolMessage(tool_call_id=..., name=..., content=...)` are appended to the conversation history.
    - The loop iterates (bounded by `max_tool_rounds=5`) to allow the model to either request additional tools or stream the final answer.
 
-### 5.2 Multi-Tool Execution in a Single Turn
+### 5.2 Free.ai OpenAI-Compatible Client Streaming Loop
+In `./server/src/llm/freeai_model.py`:
+1. **Tool Invocation Directives**:
+   - Must supply `tool_choice="auto"` and `temperature=0.7`.
+   - Without `tool_choice="auto"`, vLLM may default to `none` or skip emitting tool call tokens for roleplay personas.
+2. **Intermediate Pre-Tool Content Isolation**:
+   - When Qwen 7B or similar instruction-tuned models emit conversational excuses (*"Wait a sec, I'll check..."*) in round 1 alongside a tool call, this text is buffered in `round_content_chunks`.
+   - If `tool_calls_dict` is non-empty, intermediate filler text is **suppressed** from downstream TTS synthesis and subtitle dispatching. Only round 2's grounded response incorporating the tool result is vocalized to the user.
+   - The assistant message appended to history retains `content="".join(round_content_chunks)` to maintain full OpenAI schema compliance.
+3. **Finish-Reason Agnosticism**:
+   - The loop inspects `if not tool_calls_dict: break` rather than demanding `finish_reason == "tool_calls"`. This ensures tool calls are executed even if gateways conclude frames with `finish_reason: "stop"` or `None`.
+4. **Fallback Streaming**:
+   - If all tools are disabled or tool definitions are empty, the handler automatically falls back to universal SSE direct streaming (`/v1/chat/`).
+
+### 5.3 Multi-Tool Execution in a Single Turn
 The model can invoke multiple tools either in parallel or sequentially. For example, for the query *"What is today's date and what time is it?"*, the model invokes both `get_current_date` and `get_current_time` in round 1, then synthesizes both results in round 2:
 ```text
 Round 1: [Tool: get_current_date] → Saturday, September 26, 2026
@@ -235,7 +249,11 @@ When tool execution concludes, `tool_end` clears the status pill smoothly as spo
 3. **Safe AST Evaluation vs. Arbitrary Code Execution**:
    - For mathematical calculations, LLMs frequently make simple arithmetic and percentage calculation errors. Rather than invoking dangerous Python `eval()` or `exec()`, the `calculate` tool uses Python's `ast` parser to strictly evaluate mathematical expression nodes with safe operators and white-listed math functions.
 4. **Unbloated Prompt Design via API Schemas**:
-   - Manually enumerating all tool signatures, argument definitions, and descriptions inside the system prompt causes prompt bloat, increases input token costs, and creates synchronization drift when tools change. Modern models (Mistral, Qwen, OpenAI) receive the exact JSON schema in the API `tools` array. The system prompt only requires concise behavioral instructions and a discovery tool (`get_available_tools`).
+   - Manually enumerating all tool signatures, argument definitions, and descriptions inside the system prompt causes prompt bloat, increases input token costs, and creates synchronization drift when tools change. Modern models (Mistral, Qwen, OpenAI) receive the exact JSON schema in the API `tools` array.
+5. **Small-Model Attention Overload & Tool Schema Disambiguation**:
+   - Smaller 7B-parameter models (such as Qwen 2.5 7B) exhibit attention degradation when presented with too many overlapping tools (e.g. 5 different time tools: `get_current_time`, `get_timezone_info`, `convert_time`, `time_difference`, `get_current_date`). In benchmarking, passing 1–3 distinct tools triggered function calling 100% of the time, whereas 9 overlapping tools caused the model to hesitate and output conversational excuses (*"I'll check..."*).
+   - Setting `get_available_tools` to `enabled=False` by default avoids redundant schema pollution (since the model already receives all enabled tools in the API request).
+   - Tool descriptions must be kept crisp, distinct, and unambiguous so smaller models can easily route user requests without hesitation.
 
 ---
 

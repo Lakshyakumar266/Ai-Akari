@@ -101,9 +101,18 @@ export interface SpeechEndEvent {
 * **Why It Failed**: Any subsequent emotion tags (e.g., `[surprised]` or `[angry]` in line 2 or 3) were destroyed before sentence chunking. The system only knew about the first detected tag, locking the character to that single expression for the entire turn.
 * **Key Takeaway**: Use tag-retaining regex tokenization (`split_dialogue_units_with_emotions`) to partition the text so each dialogue unit retains its active emotion.
 
-### Pitfall 4: Protocol Non-Breaking Design
-* **What Happened**: Concern that modifying types would break subtitle synchronization or networking contracts.
-* **Key Takeaway**: Adding an optional field (`emotion?: string`) to `SpeechSegmentEvent` maintains 100% backwards compatibility with all existing consumers (`SubtitleOverlay`, `LipSyncController`).
+### Pitfall 5: Unrecognized Emotion Tag Leakage into Subtitles & Spoken Dialogue
+* **What Happened**: When using Tsundere prompts or third-party LLMs (e.g. Free.ai Qwen 2.5 7B), the model frequently output expressive variations such as `[annoyed]`, `[blush]`, `[flustered]`, or `[pouting]`. Because `EMOTION_TAG_PATTERN` was strictly limited to `r"\[(happy|sad|angry|surprised|relaxed|neutral)\]"`, tags like `[annoyed]` were ignored by the regex.
+* **Why It Failed**: 
+  1. `strip_all_emotion_tags()` failed to remove `[annoyed]`, leaving it inside `current_sentence`.
+  2. TTS received `[annoyed]` in its raw text, causing speech synthesis glitches or vocalizing the tag.
+  3. `speech_segment.text` sent to the frontend contained `"[annoyed] Ugh, do you have *any* sense of decorum?..."`, directly displaying `[annoyed]` in on-screen subtitles.
+  4. The VRM avatar received `Neutral` instead of reacting with an annoyed/angry facial expression.
+* **Key Takeaway**:
+  1. **Comprehensive Regex**: Use `r"\[([a-zA-Z_\-]+)\]"` to match **any** bracketed word.
+  2. **Canonical Alias Mapping**: Map common conversational expressions to the 6 core VRM presets (e.g., `annoyed`, `mad`, `pouting` $\to$ `Angry`; `blush`, `flustered`, `teasing` $\to$ `Happy`).
+  3. **Defense-in-Depth Sanitization**: Clean subtitles on both backend (`strip_all_emotion_tags`) AND frontend (`cleanSubtitleText` in `SubtitleOverlay.tsx`).
+  4. **Markdown Formatting Stripping**: Strip Markdown asterisks used for emphasis (`*any*` $\to$ `any`, removing lone `*`) so markdown formatting does not bleed into subtitles.
 
 ---
 
@@ -111,14 +120,58 @@ export interface SpeechEndEvent {
 
 ### 5.1 Emotion Parser & Dialogue Segmenter (`server/src/voice/emotion_feature.py`)
 
+#### Canonical Emotion Alias Dictionary
+```python
+EMOTION_ALIASES: dict[str, str] = {
+    # 6 Core VRM emotions
+    "neutral": "Neutral",
+    "happy": "Happy",
+    "sad": "Sad",
+    "angry": "Angry",
+    "relaxed": "Relaxed",
+    "surprised": "Surprised",
+
+    # Tsundere & expressive aliases (matching client EmotionController)
+    "annoyed": "Angry",
+    "mad": "Angry",
+    "furious": "Angry",
+    "pouting": "Angry",
+    "irritated": "Angry",
+    "grumpy": "Angry",
+
+    "blush": "Happy",
+    "flustered": "Happy",
+    "smirk": "Happy",
+    "teasing": "Happy",
+    "joy": "Happy",
+    "embarrassed": "Happy",
+    "excited": "Happy",
+
+    "shocked": "Surprised",
+    "confused": "Surprised",
+    "gasp": "Surprised",
+    "amazed": "Surprised",
+
+    "unhappy": "Sad",
+    "crying": "Sad",
+    "sulky": "Sad",
+    "depressed": "Sad",
+    "hurt": "Sad",
+
+    "calm": "Relaxed",
+    "sleepy": "Relaxed",
+    "tired": "Relaxed",
+}
+```
+
 #### Multi-Emotion Partitioning Algorithm
-Splits text across emotion tags and punctuation boundaries while propagating the active emotion:
+Splits text across any bracketed emotion tags and punctuation boundaries while resolving the active canonical emotion:
 ```python
 def split_dialogue_units_with_emotions(
     raw_text: str, max_words: int = 16
 ) -> list[tuple[str, str]]:
     tokens = re.split(
-        r"(\[(?:happy|sad|angry|surprised|relaxed|neutral)\])",
+        r"(\[[a-zA-Z_\-]+\])",
         raw_text,
         flags=re.IGNORECASE,
     )
@@ -130,11 +183,11 @@ def split_dialogue_units_with_emotions(
             continue
         tag_match = EMOTION_TAG_PATTERN.fullmatch(token.strip())
         if tag_match:
-            tag_name = tag_match.group(1).capitalize()
-            if tag_name in VALID_EMOTIONS:
-                current_emotion = tag_name
+            tag_name = tag_match.group(1).lower()
+            if tag_name in EMOTION_ALIASES:
+                current_emotion = EMOTION_ALIASES[tag_name]
         else:
-            text = token.strip()
+            text = strip_all_emotion_tags(token)
             if text:
                 sections.append((text, current_emotion))
 

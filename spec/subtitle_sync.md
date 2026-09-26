@@ -164,6 +164,9 @@ if (!this.audioElement) {
 * **VRM Lip-Sync**: Because audio routes through `_gain` -> `_analyser`, `LipSyncController` continues sampling live RMS and frequency spectrum, keeping avatar lip movement in 100% sync.
 
 #### `SubtitleOverlay` (`client/src/components/SubtitleOverlay.tsx`)
+- **Defense-in-Depth Sanitization (`cleanSubtitleText(text)`)**:
+  - Automatically strips any bracketed tags (e.g. `[annoyed]`, `[happy]`, `[sigh]`) that may have slipped past LLM generation or TTS processing.
+  - Strips Markdown emphasis asterisks (`*any*` $\to$ `any`, removing lone `*`) to maintain pure, unformatted anime subtitle text.
 - Formats incoming text into at most 2 visual lines (`formatTwoLines(text)`).
 - Words brighten sequentially based on:
   ```typescript

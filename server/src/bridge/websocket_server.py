@@ -8,7 +8,6 @@ from websockets.asyncio.server import serve, ServerConnection
 
 from .broadcaster import broadcaster
 from .protocol import BinaryPacket
-from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 from src.asr.server_asr import unload_asr_model
 from src.asr.chat_whisper import unload_stream_model
 from src.llm import get_provider_info, set_active_provider, is_tool_calling_supported
@@ -50,6 +49,8 @@ def get_chat_input_enabled() -> bool:
 
 async def set_chat_input_enabled(enabled: bool):
     global _chat_input_enabled
+    from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
+
     if _chat_input_enabled == enabled and (not enabled and is_voice_loop_running()):
         return
 

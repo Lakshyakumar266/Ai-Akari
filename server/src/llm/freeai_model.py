@@ -24,7 +24,7 @@ def get_client() -> OpenAI:
     key, base_url = get_freeai_credentials()
     if not key:
         print("[FreeAI] Warning: FREEAI_APIKEY is not set in environment.")
-    return OpenAI(base_url=base_url, api_key=key or "missing-key")
+    return OpenAI(base_url=base_url, api_key=key or "none", timeout=45.0)
 
 
 def _format_messages(prompt: str, history: list) -> list[dict]:
@@ -164,6 +164,51 @@ def stream_chat(
     # Tool calling enabled path via OpenAI-compatible client
     tools = tool_registry.get_tool_definitions(only_enabled=True)
     if not tools:
+        # Fallback to direct stream if no tools enabled
+        url = f"{base_url.rstrip('/')}/chat/"
+        try:
+            with httpx.stream(
+                "POST",
+                url,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": chosen_model,
+                    "messages": messages,
+                    "temperature": 0.9,
+                    "stream": True,
+                },
+                timeout=60.0,
+            ) as resp:
+                if resp.status_code >= 400:
+                    resp.read()
+                    err_msg = resp.text
+                    print(f"[FreeAI] Stream Error ({resp.status_code}): {err_msg}")
+                    yield f"[Free.ai Error: {err_msg}]"
+                    return
+
+                for line in resp.iter_lines():
+                    if cancel_event is not None and cancel_event.is_set():
+                        return
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            choices = chunk.get("choices", [])
+                            if choices and choices[0].get("delta"):
+                                delta = choices[0]["delta"].get("content")
+                                if delta:
+                                    yield delta
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as err:
+            print(f"[FreeAI] Fallback stream exception: {err}")
         return
 
     client = get_client()
@@ -179,7 +224,8 @@ def stream_chat(
                 model=chosen_model,
                 messages=messages,
                 tools=tools,
-                temperature=0.9,
+                tool_choice="auto",
+                temperature=0.7,
                 stream=True,
             )
         except Exception as err:
@@ -189,6 +235,7 @@ def stream_chat(
 
         tool_calls_dict: dict[int, dict] = {}
         finish_reason = None
+        round_content_chunks: list[str] = []
 
         for chunk in stream:
             if cancel_event is not None and cancel_event.is_set():
@@ -198,7 +245,8 @@ def stream_chat(
                 continue
 
             choice = chunk.choices[0]
-            finish_reason = choice.finish_reason
+            if choice.finish_reason:
+                finish_reason = choice.finish_reason
 
             if choice.delta.tool_calls:
                 for tc in choice.delta.tool_calls:
@@ -222,11 +270,16 @@ def stream_chat(
                             )
 
             if choice.delta.content:
-                yield choice.delta.content
+                round_content_chunks.append(choice.delta.content)
 
-        if not tool_calls_dict or finish_reason != "tool_calls":
+        # If no tool calls were requested, this is the final conversational response
+        if not tool_calls_dict:
+            for c in round_content_chunks:
+                yield c
             break
 
+        # If a tool call was requested, isolate intermediate filler from TTS speech:
+        # Do not yield pre-tool excuses like "wait a sec". Only the final response in round 2 will speak.
         assistant_tool_calls = [
             {
                 "id": t["id"],
@@ -235,9 +288,10 @@ def stream_chat(
             }
             for t in tool_calls_dict.values()
         ]
+        accumulated_text = "".join(round_content_chunks).strip()
         messages.append({
             "role": "assistant",
-            "content": None,
+            "content": accumulated_text if accumulated_text else None,
             "tool_calls": assistant_tool_calls,
         })
 
