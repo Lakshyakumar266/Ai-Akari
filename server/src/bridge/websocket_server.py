@@ -11,25 +11,37 @@ from .protocol import BinaryPacket
 from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 from src.asr.server_asr import unload_asr_model
 from src.asr.chat_whisper import unload_stream_model
-from src.llm import get_provider_info, set_active_provider
+from src.llm import get_provider_info, set_active_provider, is_tool_calling_supported
+from src.config import TOOL_CALLING_ENABLED, MAX_TOOL_CALL_ROUNDS
+from src.tools import tool_registry
 
 HOST = "127.0.0.1"
 PORT = 8765
 
 # Dynamic mode state: True = Chat Mode (client UI driven), False = Stream Mode (server mic loop driven)
 _chat_input_enabled: bool = True
+_tool_calling_enabled: bool = TOOL_CALLING_ENABLED
+_max_tool_calls: int = MAX_TOOL_CALL_ROUNDS
 
 
 def _build_config_dict() -> dict:
     """Builds the comprehensive configuration payload for connected clients."""
     provider_info = get_provider_info()
+    active_prov = provider_info["active_provider"]
+    active_mod = provider_info["active_model"]
+    supported = is_tool_calling_supported(active_prov, active_mod)
     return {
         "type": "config",
         "chat_input_enabled": _chat_input_enabled,
-        "llm_provider": provider_info["active_provider"],
-        "llm_model": provider_info["active_model"],
+        "llm_provider": active_prov,
+        "llm_model": active_mod,
         "available_llm_providers": provider_info["providers"],
+        "tool_calling_enabled": _tool_calling_enabled and supported,
+        "tool_calling_supported": supported,
+        "max_tool_calls": _max_tool_calls,
+        "available_tools": tool_registry.get_tools_summary(),
     }
+
 
 
 def get_chat_input_enabled() -> bool:
@@ -222,7 +234,21 @@ async def _handle_chat_message(data: dict):
     # Cancel previous stream if still generating/speaking without emitting speech_end
     await stop_chat_stream(emit_speech_end=False)
 
-    task = asyncio.create_task(process_chat_message(text))
+    from src.tools.builtins import set_client_timezone
+    client_tz = data.get("timezone")
+    if client_tz:
+        set_client_timezone(client_tz)
+
+    req_tools = data.get("tools_enabled")
+    tools_enabled = _tool_calling_enabled if req_tools is None else bool(req_tools)
+
+    task = asyncio.create_task(
+        process_chat_message(
+            text,
+            tools_enabled=tools_enabled,
+            max_tool_rounds=_max_tool_calls,
+        )
+    )
     set_active_chat_task(task)
 
 
@@ -236,10 +262,13 @@ async def client_handler(websocket: ServerConnection):
       AUDIO_INTERRUPT (0x03)                → stop response/stream
 
     JSON frames:
-      set_mode      → { type: "set_mode", chat_input_enabled: bool, mode: "chat"|"stream" }
-      chat_message  → { type: "chat_message", text: "..." }
-      interrupt     → { type: "interrupt" }
+      set_mode          → { type: "set_mode", chat_input_enabled: bool, mode: "chat"|"stream" }
+      set_llm_provider  → { type: "set_llm_provider", provider: "...", model: "..." }
+      set_tool_calling  → { type: "set_tool_calling", enabled: bool, max_calls?: int }
+      chat_message      → { type: "chat_message", text: "..." }
+      interrupt         → { type: "interrupt" }
     """
+    global _tool_calling_enabled, _max_tool_calls
 
     await broadcaster.register(websocket)
     await _send_config(websocket)
@@ -286,6 +315,10 @@ async def client_handler(websocket: ServerConnection):
                         enabled = True
                     if "llm_provider" in data:
                         set_active_provider(data["llm_provider"], data.get("llm_model"))
+                        if _tool_calling_enabled and not is_tool_calling_supported(
+                            data["llm_provider"], data.get("llm_model")
+                        ):
+                            _tool_calling_enabled = False
                     await set_chat_input_enabled(enabled)
 
                 elif msg_type == "set_llm_provider":
@@ -293,7 +326,39 @@ async def client_handler(websocket: ServerConnection):
                     model_id = data.get("model")
                     if provider_id:
                         set_active_provider(provider_id, model_id)
+                        if _tool_calling_enabled and not is_tool_calling_supported(
+                            provider_id, model_id
+                        ):
+                            print(
+                                f"[Bridge] Disabling tool calling because new model '{model_id}' is unsupported."
+                            )
+                            _tool_calling_enabled = False
                         await broadcaster.broadcast(_build_config_dict())
+
+                elif msg_type == "set_tool_calling":
+                    enabled = bool(data.get("enabled", False))
+                    if "max_calls" in data:
+                        try:
+                            _max_tool_calls = max(1, min(10, int(data["max_calls"])))
+                        except Exception:
+                            pass
+
+                    provider_info = get_provider_info()
+                    supported = is_tool_calling_supported(
+                        provider_info["active_provider"], provider_info["active_model"]
+                    )
+                    if enabled and not supported:
+                        print(
+                            f"[Bridge] Tool calling not supported by '{provider_info['active_model']}', keeping disabled."
+                        )
+                        _tool_calling_enabled = False
+                    else:
+                        _tool_calling_enabled = enabled
+                        print(
+                            f"[Bridge] Tool calling updated: {_tool_calling_enabled} (max_calls={_max_tool_calls})"
+                        )
+
+                    await broadcaster.broadcast(_build_config_dict())
 
                 elif msg_type == "chat_message":
                     if _chat_input_enabled:
@@ -311,6 +376,7 @@ async def client_handler(websocket: ServerConnection):
 
                 else:
                     print(f"[Bridge] Unknown message type: {msg_type}")
+
 
             except json.JSONDecodeError:
                 print(f"[Bridge] Invalid JSON: {message[:80]}")

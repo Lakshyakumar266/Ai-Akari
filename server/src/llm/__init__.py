@@ -3,6 +3,7 @@ from .provider import (
     classify_emotion,
     get_provider_info,
     set_active_provider,
+    is_tool_calling_supported,
     AVAILABLE_PROVIDERS,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "classify_emotion",
     "get_provider_info",
     "set_active_provider",
+    "is_tool_calling_supported",
     "AVAILABLE_PROVIDERS",
 ]

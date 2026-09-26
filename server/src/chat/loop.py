@@ -107,11 +107,13 @@ async def stop_chat_stream(emit_speech_end: bool = True):
     print("[Chat] Stream successfully stopped.")
 
 
-async def process_chat_message(user_text: str):
+async def process_chat_message(
+    user_text: str, tools_enabled: bool = False, max_tool_rounds: int = 5
+):
     """
     End-to-end pipeline for a user chat message:
       1. Dispatch transcript event (so client can show what the user said)
-      2. Stream LLM response
+      2. Stream LLM response (with optional tool execution)
       3. Generate TTS audio per dialogue unit
       4. Dispatch speech_segment events to client
     """
@@ -123,7 +125,7 @@ async def process_chat_message(user_text: str):
     cancel_event = threading.Event()
     _active_cancel_event = cancel_event
 
-    print(f"[Chat] You: {user_text}")
+    print(f"[Chat] You: {user_text} (tools_enabled={tools_enabled})")
     await transcript(user_text)
     await thinking_start()
 
@@ -153,13 +155,28 @@ async def process_chat_message(user_text: str):
     loop = asyncio.get_running_loop()
     unit_queue: asyncio.Queue[tuple[str, str] | None] = asyncio.Queue()
 
+    def on_tool_activity(tool_name: str, stage: str):
+        from src.bridge.events import tool_start, tool_end
+
+        if stage == "start":
+            loop.call_soon_threadsafe(asyncio.create_task, tool_start(tool_name))
+        else:
+            loop.call_soon_threadsafe(asyncio.create_task, tool_end(tool_name))
+
     def stream_and_chunk():
         print("[Chat] Akari: ", end="", flush=True)
         buffer = ""
         current_sentence = ""
 
         try:
-            for token in stream_chat(user_text, _history):
+            for token in stream_chat(
+                user_text,
+                _history,
+                tools_enabled=tools_enabled,
+                max_tool_rounds=max_tool_rounds,
+                on_tool_activity=on_tool_activity,
+                cancel_event=cancel_event,
+            ):
                 if cancel_event.is_set():
                     print("\n[Chat] Stream cancelled by user stop request.")
                     return
@@ -167,6 +184,7 @@ async def process_chat_message(user_text: str):
                 print(token, end="", flush=True)
                 full_reply.append(token)
                 buffer += token
+
 
                 buffer = emotion_mgr.on_token(token, buffer, dispatch)
                 current_emotion = emotion_mgr.detected_emotion or "Neutral"

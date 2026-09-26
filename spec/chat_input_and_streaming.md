@@ -2,7 +2,7 @@
 
 ## 1. Overview & Objective
 
-This specification details the architecture, data contracts, and design principles for the **interactive glassmorphic chat input bar, real-time client-to-server voice streaming, and responsive subtitle coexistence** in the Akari Watanabe AI Companion.
+This specification details the architecture, data contracts, and design principles for the **interactive glassmorphic chat input bar, real-time client-to-server voice streaming, and responsive subtitle coexistence** in the Akari Watanabe AI assistant.
 
 The system supports two complementary input modalities without disrupting the 3D avatar rendering loop:
 1. **Zero-Latency Keyboard Text Input**: Multiline text input with native CSS field sizing, instant DOM response, Enter-to-send support, and GPU composite isolation over a 60 FPS WebGL canvas.
@@ -181,21 +181,21 @@ export interface TurnEndEvent {
 * **What Happened**: Subtitles were hardcoded to `bottom: "8%"`. When the floating chat bar was displayed at the bottom center of the screen, the subtitles directly collided with and obscured the input bar.
 * **Why It Failed**: Fixed viewport positioning fails when UI elements dynamically mount based on server configuration flags.
 * **Key Takeaway**: Make subtitle positioning reactive:
-  - Add an optional `raised?: boolean` prop to [`SubtitleOverlay`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/client/src/components/SubtitleOverlay.tsx).
+  - Add an optional `raised?: boolean` prop to [`SubtitleOverlay`](/client/src/components/SubtitleOverlay.tsx).
   - When `raised` is `true`: position at `bottom: "16%"` (safely above the floating chat bar with ample breathing room).
   - When `raised` is `false`: position at default `bottom: "8%"`.
   - Add CSS transition (`transition: opacity 300ms ease, bottom 0.25s ease`) for smooth elevation animations when toggling states.
 
 ### Pitfall 6: Server Mic Loop Conflict
 * **What Happened**: Running `run_voice_loop()` on the server while the browser UI was also capturing microphone audio created duplicate listening loops and potential acoustic feedback.
-* **Key Takeaway**: Use the `ENABLE_CHAT_INPUT` configuration toggle in [`server/src/config.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/config.py). When enabled, [`server/src/runtime.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/runtime.py) bypasses the local microphone loop and keeps the server alive via `await asyncio.Event().wait()`, letting incoming WebSocket frames drive dialogue.
+* **Key Takeaway**: Use the `ENABLE_CHAT_INPUT` configuration toggle in [`server/src/config.py`](/server/src/config.py). When enabled, [`server/src/runtime.py`](/server/src/runtime.py) bypasses the local microphone loop and keeps the server alive via `await asyncio.Event().wait()`, letting incoming WebSocket frames drive dialogue.
 
 ---
 
 ## 5. Detailed Component Specifications
 
 ### 5.1 Frontend: `ChatInput.tsx` & `ChatInput.css`
-- **Location**: [`client/src/components/ChatInput.tsx`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/client/src/components/ChatInput.tsx) and [`client/src/components/ChatInput.css`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/client/src/components/ChatInput.css)
+- **Location**: [`client/src/components/ChatInput.tsx`](/client/src/components/ChatInput.tsx) and [`client/src/components/ChatInput.css`](/client/src/components/ChatInput.css)
 - **Audio Capture**:
   - Uses `navigator.mediaDevices.getUserMedia` with `echoCancellation`, `noiseSuppression`, and target sample rate 16000 Hz.
   - ScriptProcessor downsamples/converts Float32 to Little-Endian Int16 PCM.
@@ -211,7 +211,7 @@ export interface TurnEndEvent {
     - Clicking Stop triggers `handleStop()`, which invokes `speechQueue.interrupt()`, dispatches `{ type: "interrupt" }`, clears queued segments and audio playback, and resets the button state to send mode.
 
 ### 5.2 Frontend: `SubtitleOverlay.tsx`
-- **Location**: [`client/src/components/SubtitleOverlay.tsx`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/client/src/components/SubtitleOverlay.tsx)
+- **Location**: [`client/src/components/SubtitleOverlay.tsx`](/client/src/components/SubtitleOverlay.tsx)
 - **Props**:
   ```typescript
   interface SubtitleOverlayProps {
@@ -229,7 +229,7 @@ export interface TurnEndEvent {
   ```
 
 ### 5.3 Backend: Streaming Whisper (`stream_whisper.py`)
-- **Location**: [`server/src/asr/stream_whisper.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/asr/stream_whisper.py)
+- **Location**: [`server/src/asr/stream_whisper.py`](/server/src/asr/stream_whisper.py)
 - **Model**: `tiny.en` loaded on CPU with `int8` quantization (~75MB RAM).
 - **Interim Transcribe (`transcribe_stream_interim`)**:
   - VAD filter with `min_silence_duration_ms=250`.
@@ -239,7 +239,7 @@ export interface TurnEndEvent {
   - Uses the identical model instance with hallucination silence thresholds and repetition penalties.
 
 ### 5.4 Backend: WebSocket Server (`websocket_server.py`)
-- **Location**: [`server/src/bridge/websocket_server.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/bridge/websocket_server.py)
+- **Location**: [`server/src/bridge/websocket_server.py`](/server/src/bridge/websocket_server.py)
 - **`VoiceSession` Class**:
   - Manages per-client audio chunk accumulation.
   - Runs background `_interim_worker` every `0.5s` on accumulated audio (> 0.4s).
@@ -251,7 +251,7 @@ export interface TurnEndEvent {
   - When starting a new chat turn via `_handle_chat_message()`, invokes `await stop_chat_stream(emit_speech_end=False)` so that any previous generation task is safely cancelled *without* broadcasting a premature `speech_end` to the browser.
 
 ### 5.5 Backend: Chat Loop (`chat/loop.py`)
-- **Location**: [`server/src/chat/loop.py`](file:///d:/CodingProGamer/ML/AkariWattnabe-companion/server/src/chat/loop.py)
+- **Location**: [`server/src/chat/loop.py`](/server/src/chat/loop.py)
 - **Immediate Stream Abort (`stop_chat_stream(emit_speech_end=True)`)**:
   - Sets a `threading.Event()` cancel flag that breaks the Mistral LLM token generator loop immediately.
   - Cancels the active `asyncio.Task` and flushes any pending dialogue units in the `unit_queue`.

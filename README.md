@@ -1,22 +1,22 @@
-# Anime Wifu Companion
+# AiAkari Assistant
 
-A local, two-part anime companion that brings **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*) to life:
+A local, two-part AI assistant that brings **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*) to life:
 
 - **`client/`** — a 3D web viewer that renders a VRM model of Akari in the browser (React + Three.js). The character blinks, breathes, follows your camera, and can play animations and facial expressions.
 - **`server/`** — a voice-in / voice-out loop. Your speech is transcribed on-device, replies are streamed from Mistral with an Akari persona, and Fish Audio speaks them back through mpv.
 
-The two halves are independent today: the client is a self-contained VRM scene, and the server is a microphone-driven CLI companion. A full voice → 3D avatar pipeline is a natural next step.
+The two halves are independent today: the client is a self-contained VRM scene, and the server is a microphone-driven CLI . A full voice → 3D avatar pipeline is a natural next step.
 
 ## Repository layout
 
 ```
-AkariWattnabe-companion/
+AkariWattnabe/
 ├── client/              # 3D VRM character viewer (React + Vite + Three.js)
 │   ├── public/
 │   │   ├── character.vrm         # Akari model
 │   │   └── animations/           # .vrma clips (Blush, Jump, Sad, ...)
 │   └── src/components/character/ # controllers: animation, blink, emotion, lip-sync...
-└── server/              # Voice companion (Python)
+└── server/              # Voice assistant (Python)
     ├── src/
     │   ├── main.py               # Voice loop entry point
     │   ├── asr/voice_to_text.py  # Mic + faster-whisper
@@ -41,7 +41,7 @@ bun run dev        # http://localhost:5173
 
 Scripts: `bun run dev`, `bun run build`, `bun run lint` (oxlint), `bun run preview`.
 
-### Server (voice companion)
+### Server (voice assistant)
 
 Requires **Python 3.11+**, [uv](https://docs.astral.sh/uv/), a microphone, speakers, and mpv on Windows. See [`server/README.md`](server/README.md) for full setup and API-key instructions.
 

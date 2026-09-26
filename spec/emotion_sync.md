@@ -2,7 +2,7 @@
 
 ## 1. Overview & Objective
 
-This specification details the architecture, data contracts, and engineering knowledge for the real-time audio-synchronized emotion system in the Akari Watanabe AI Companion.
+This specification details the architecture, data contracts, and engineering knowledge for the real-time audio-synchronized emotion system in the Akari Watanabe AI assistant.
 
 The primary objective is to synchronize the 3D VRM avatar's facial expressions in **exact lockstep** with character speech:
 1. Expressions must activate the exact millisecond the corresponding audio segment begins playing.

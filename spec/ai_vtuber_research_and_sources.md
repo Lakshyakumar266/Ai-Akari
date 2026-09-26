@@ -1,16 +1,16 @@
-# AI VTuber & Conversational Companion Architecture Specification
+# AI VTuber & Conversational Assistant Architecture Specification
 
 ## 1. Executive Summary
 
 This specification documents the engineering principles, architectural patterns, and implementation knowledge synthesized from real-world open-source AI VTuber systems—most notably [0Xiaohei0/LocalAIVtuber2](https://github.com/0Xiaohei0/LocalAIVtuber2)—along with cutting-edge industry research across real-time Web Audio, low-latency Voice Activity Detection (VAD), 3D VRM lip-sync animation, and audio-synchronized anime subtitle rendering.
 
-This document serves as the foundational engineering guide for developing high-performance, conversational anime companions capable of real-time multi-modal interactions.
+This document serves as the foundational engineering guide for developing high-performance, conversational anime assistant capable of real-time multi-modal interactions.
 
 ---
 
 ## 2. Deep Dive: Architectural Insights from `LocalAIVtuber2`
 
-Analyzing [0Xiaohei0/LocalAIVtuber2](https://github.com/0Xiaohei0/LocalAIVtuber2) revealed several critical design patterns that distinguish successful interactive AI companions from naive conversational wrappers.
+Analyzing [0Xiaohei0/LocalAIVtuber2](https://github.com/0Xiaohei0/LocalAIVtuber2) revealed several critical design patterns that distinguish successful interactive AI assistant from naive conversational wrappers.
 
 ### 2.1 The Task Pipeline Manager Pattern
 
@@ -88,7 +88,7 @@ During playback, an animation loop samples `analyser.getByteFrequencyData()`, ca
 
 ## 3. Subtitle & Dialogue Synchronization Models
 
-Conversational AI companions must present dialogue subtitles that mirror natural speech timing. During our implementation and benchmarking, four approaches were evaluated:
+Conversational AI assistants must present dialogue subtitles that mirror natural speech timing. During our implementation and benchmarking, four approaches were evaluated:
 
 | Approach | Latency Impact | Boundary Accuracy | Implementation Complexity | Verdict |
 |---|---|---|---|---|
@@ -171,7 +171,7 @@ text-shadow:
 
 ### 5.2 Curated Anime Typefaces
 - **Primary Font**: `Zen Kaku Gothic New` (Google Fonts) – clean geometric proportions, high Japanese & Latin glyph fidelity.
-- **Secondary Font**: `M PLUS Rounded 1c` – rounded display stroke, friendly anime companion personality.
+- **Secondary Font**: `M PLUS Rounded 1c` – rounded display stroke, friendly anime assistant personality.
 - **Fallback**: `sans-serif`.
 
 ### 5.3 Word State Color Palette
