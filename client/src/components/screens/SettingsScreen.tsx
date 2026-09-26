@@ -68,12 +68,6 @@ const PROVIDERS: ProviderDetail[] = [
         context: "32k context",
       },
       {
-        id: "qwen/qwen3.6-35b-a3b",
-        name: "Qwen 3.6 35B A3B",
-        badge: "262K Context · 35B",
-        context: "262k context",
-      },
-      {
         id: "qwen3-8b",
         name: "Qwen 3 8B",
         badge: "Next-Gen",

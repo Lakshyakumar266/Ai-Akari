@@ -56,7 +56,6 @@ In `./server/src/llm/freeai_model.py`, streaming is parsed directly from `resp.i
 | **Mistral AI** | `mistral-small-latest` | Mistral Small | Reasoning | 32k |
 | **Mistral AI** | `open-mistral-7b` | Open Mistral 7B | Baseline | 32k |
 | **Free.ai** | `qwen7b` | Qwen 2.5 7B | Recommended Free | 32k |
-| **Free.ai** | `qwen/qwen3.6-35b-a3b` | Qwen 3.6 35B A3B | Next-Gen 35B | 262k |
 | **Free.ai** | `qwen3-8b` | Qwen 3 8B | Instruction Tuned | 32k |
 | **Free.ai** | `mistral` | Mistral 7B | Fast Inference | 32k |
 | **Free.ai** | `deepseek-r1` | DeepSeek R1 Distill | Chain of Thought | 64k |
