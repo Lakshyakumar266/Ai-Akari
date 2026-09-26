@@ -93,20 +93,6 @@ const PROVIDERS: ProviderDetail[] = [
         context: "32k context",
         toolCallingSupported: true,
       },
-      {
-        id: "mistral",
-        name: "Mistral 7B",
-        badge: "Fast Inference",
-        context: "32k context",
-        toolCallingSupported: false,
-      },
-      {
-        id: "deepseek-r1",
-        name: "DeepSeek R1 Distill",
-        badge: "Chain of Thought",
-        context: "64k context",
-        toolCallingSupported: false,
-      },
     ],
   },
   {

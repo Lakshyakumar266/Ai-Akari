@@ -65,16 +65,6 @@ AVAILABLE_PROVIDERS = [
                 "name": "Qwen 3 8B",
                 "tool_calling_supported": True,
             },
-            {
-                "id": "mistral",
-                "name": "Mistral 7B",
-                "tool_calling_supported": False,
-            },
-            {
-                "id": "deepseek-r1",
-                "name": "DeepSeek R1 Distill",
-                "tool_calling_supported": False,
-            },
         ],
     },
     {
