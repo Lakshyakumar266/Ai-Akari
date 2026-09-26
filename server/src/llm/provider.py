@@ -20,17 +20,30 @@ from . import freeai_model
 
 load_dotenv()
 
-# Available provider definitions
+# Available provider definitions with explicit tool-calling capability flags
 AVAILABLE_PROVIDERS = [
     {
         "id": "mistral",
         "name": "Mistral AI",
         "description": "Official Mistral AI API with conversational reasoning.",
         "default_model": "ministral-8b-latest",
+        "tool_calling_supported": True,
         "models": [
-            {"id": "ministral-8b-latest", "name": "Ministral 8B (Default)"},
-            {"id": "mistral-small-latest", "name": "Mistral Small"},
-            {"id": "open-mistral-7b", "name": "Open Mistral 7B"},
+            {
+                "id": "ministral-8b-latest",
+                "name": "Ministral 8B (Default)",
+                "tool_calling_supported": True,
+            },
+            {
+                "id": "mistral-small-latest",
+                "name": "Mistral Small",
+                "tool_calling_supported": True,
+            },
+            {
+                "id": "open-mistral-7b",
+                "name": "Open Mistral 7B",
+                "tool_calling_supported": True,
+            },
         ],
     },
     {
@@ -38,11 +51,28 @@ AVAILABLE_PROVIDERS = [
         "name": "Free.ai",
         "description": "Unified OpenAI-compatible API (https://free.ai/api/).",
         "default_model": "qwen7b",
+        "tool_calling_supported": True,
         "models": [
-            {"id": "qwen7b", "name": "Qwen 2.5 7B (Fast / Free)"},
-            {"id": "qwen3-8b", "name": "Qwen 3 8B"},
-            {"id": "mistral", "name": "Mistral 7B"},
-            {"id": "deepseek-r1", "name": "DeepSeek R1 Distill"},
+            {
+                "id": "qwen7b",
+                "name": "Qwen 2.5 7B (Fast / Free)",
+                "tool_calling_supported": True,
+            },
+            {
+                "id": "qwen3-8b",
+                "name": "Qwen 3 8B",
+                "tool_calling_supported": True,
+            },
+            {
+                "id": "mistral",
+                "name": "Mistral 7B",
+                "tool_calling_supported": False,
+            },
+            {
+                "id": "deepseek-r1",
+                "name": "DeepSeek R1 Distill",
+                "tool_calling_supported": False,
+            },
         ],
     },
 ]
@@ -58,13 +88,35 @@ _active_model: str = (
 )
 
 
+def is_tool_calling_supported(
+    provider_id: str | None = None, model_id: str | None = None
+) -> bool:
+    """Evaluates whether the specified (or currently active) provider & model supports tool calling."""
+    target_provider = provider_id or _active_provider
+    target_model = model_id or _active_model
+
+    p_info = next((p for p in AVAILABLE_PROVIDERS if p["id"] == target_provider), None)
+    if not p_info:
+        return False
+
+    m_info = next((m for m in p_info["models"] if m["id"] == target_model), None)
+    if not m_info:
+        return target_provider == "mistral"
+
+    return bool(m_info.get("tool_calling_supported", False))
+
+
 def get_provider_info() -> dict:
     """Returns active provider status and all available providers for client synchronization."""
     return {
         "active_provider": _active_provider,
         "active_model": _active_model,
+        "active_tool_calling_supported": is_tool_calling_supported(
+            _active_provider, _active_model
+        ),
         "providers": AVAILABLE_PROVIDERS,
     }
+
 
 
 def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
@@ -92,13 +144,48 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
     return get_provider_info()
 
 
-def stream_chat(prompt: str, history: list) -> Generator[str, None, None]:
-    """Routes stream_chat to the currently selected LLM provider and model."""
-    print(f"[LLM Provider] Routing stream_chat to provider='{_active_provider}', model='{_active_model}'")
+import threading
+from typing import Callable
+
+
+def stream_chat(
+    prompt: str,
+    history: list,
+    tools_enabled: bool = False,
+    max_tool_rounds: int = 5,
+    on_tool_activity: Callable[[str, str], None] | None = None,
+    cancel_event: threading.Event | None = None,
+) -> Generator[str, None, None]:
+    """Routes stream_chat to the currently selected LLM provider and model with optional tool calling."""
+    effective_tools_enabled = tools_enabled and is_tool_calling_supported(
+        _active_provider, _active_model
+    )
+    print(
+        f"[LLM Provider] Routing stream_chat to provider='{_active_provider}', model='{_active_model}' "
+        f"(requested_tools={tools_enabled}, effective_tools={effective_tools_enabled})"
+    )
+
     if _active_provider == "freeai":
-        yield from freeai_model.stream_chat(prompt, history, model=_active_model)
+        yield from freeai_model.stream_chat(
+            prompt,
+            history,
+            model=_active_model,
+            tools_enabled=effective_tools_enabled,
+            max_tool_rounds=max_tool_rounds,
+            on_tool_activity=on_tool_activity,
+            cancel_event=cancel_event,
+        )
     else:
-        yield from mistral_model.stream_chat(prompt, history, model_name=_active_model)
+        yield from mistral_model.stream_chat(
+            prompt,
+            history,
+            model_name=_active_model,
+            tools_enabled=effective_tools_enabled,
+            max_tool_rounds=max_tool_rounds,
+            on_tool_activity=on_tool_activity,
+            cancel_event=cancel_event,
+        )
+
 
 
 def classify_emotion(text: str) -> str:

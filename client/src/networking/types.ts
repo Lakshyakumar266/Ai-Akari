@@ -77,6 +77,7 @@ export interface SpeechSegmentEvent {
 export interface LlmModelOption {
   id: string;
   name: string;
+  tool_calling_supported?: boolean;
 }
 
 export interface LlmProviderOption {
@@ -84,7 +85,15 @@ export interface LlmProviderOption {
   name: string;
   description: string;
   default_model: string;
+  tool_calling_supported?: boolean;
   models: LlmModelOption[];
+}
+
+export interface AvailableToolInfo {
+  id: string;
+  name: string;
+  description: string;
+  enabled?: boolean;
 }
 
 export interface ConfigEvent {
@@ -93,6 +102,10 @@ export interface ConfigEvent {
   llm_provider?: string;
   llm_model?: string;
   available_llm_providers?: LlmProviderOption[];
+  tool_calling_enabled?: boolean;
+  tool_calling_supported?: boolean;
+  max_tool_calls?: number;
+  available_tools?: AvailableToolInfo[];
 }
 
 export interface TranscriptionEvent {
@@ -103,6 +116,16 @@ export interface TranscriptionEvent {
 
 export interface TurnEndEvent {
   type: "turn_end";
+}
+
+export interface ToolStartEvent {
+  type: "tool_start";
+  tool: string;
+}
+
+export interface ToolEndEvent {
+  type: "tool_end";
+  tool: string;
 }
 
 export type AvatarEvent =
@@ -118,4 +141,6 @@ export type AvatarEvent =
   | SpeechSegmentEvent
   | ConfigEvent
   | TranscriptionEvent
-  | TurnEndEvent;
+  | TurnEndEvent
+  | ToolStartEvent
+  | ToolEndEvent;

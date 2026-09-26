@@ -1,7 +1,7 @@
 /**
  * ChatInput
  *
- * Glassmorphic floating chat bar for Akari Watanabe companion.
+ * Glassmorphic floating chat bar for Akari Watanabe.
  *
  * Voice recording:
  *   - Captures raw 16kHz mono PCM via AudioContext
@@ -165,6 +165,8 @@ export default function ChatInput() {
     }
   }, [isRecording, startRecording, stopRecording]);
 
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+
   // ─── Send chat message ─────────────────────────────────────────────────
   const handleSend = useCallback(() => {
     const el = textareaRef.current;
@@ -181,8 +183,18 @@ export default function ChatInput() {
     const params = new URLSearchParams(window.location.search);
     const provider = params.get("provider") || localStorage.getItem("akari_llm_provider") || "mistral";
     const model = params.get("model") || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
+    const toolsParam = params.get("tools");
+    const toolsStored = localStorage.getItem("akari_tool_calling_enabled");
+    const toolsEnabled =
+      toolsParam !== null
+        ? toolsParam === "true"
+        : (toolsStored !== null ? toolsStored === "true" : true);
 
-    console.log(`[ChatInput] Sending message: "${trimmed}" (provider=${provider}, model=${model})`);
+    const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    console.log(
+      `[ChatInput] Sending message: "${trimmed}" (provider=${provider}, model=${model}, tools_enabled=${toolsEnabled}, tz=${clientTimezone})`
+    );
 
     // Immediately start speech turn to keep the stop icon active throughout thinking, streaming, and audio
     speechQueue.startTurn();
@@ -192,6 +204,8 @@ export default function ChatInput() {
       text: trimmed,
       provider,
       model,
+      tools_enabled: toolsEnabled,
+      timezone: clientTimezone,
     });
 
     el.value = "";
@@ -207,6 +221,7 @@ export default function ChatInput() {
   // ─── Stop AI response ──────────────────────────────────────────────────
   const handleStop = useCallback(() => {
     console.log("[ChatInput] Stopping response & stream...");
+    setActiveTool(null);
     speechQueue.interrupt();
     avatarSocket.send({ type: "interrupt" });
     avatarSocket.sendBinary(new Uint8Array([3]).buffer);
@@ -220,6 +235,7 @@ export default function ChatInput() {
     }
     textareaRef.current?.focus();
   }, []);
+
 
   // ─── Input handler ──────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
@@ -309,6 +325,7 @@ export default function ChatInput() {
 
     // 3. Fallback: only if speechQueue is completely inactive should a server speech_end event turn off responding
     const unsubEnd = avatarEvents.subscribe("speech_end", () => {
+      setActiveTool(null);
       if (!speechQueue.active) {
         console.log("[ChatInput] Inactive speech_end received -> stopping response icon");
         setIsResponding(false);
@@ -317,11 +334,25 @@ export default function ChatInput() {
       }
     });
 
+    // 4. Tool activity events
+    const unsubToolStart = avatarEvents.subscribe("tool_start" as any, (event: any) => {
+      console.log("[ChatInput] Tool started:", event.tool);
+      setActiveTool(event.tool || "Checking...");
+      setIsResponding(true);
+    });
+
+    const unsubToolEnd = avatarEvents.subscribe("tool_end" as any, (event: any) => {
+      console.log("[ChatInput] Tool completed:", event.tool);
+      setActiveTool(null);
+    });
+
     return () => {
       unsubAllEnd();
       unsubThinking();
       unsubStart();
       unsubEnd();
+      unsubToolStart();
+      unsubToolEnd();
     };
   }, []);
 
@@ -339,7 +370,16 @@ export default function ChatInput() {
 
   return (
     <div className="chat-input-root">
+      {activeTool && (
+        <div className="chat-tool-activity-indicator" aria-live="polite">
+          <span className="tool-indicator-pulse" />
+          <span className="tool-indicator-text">
+            Checking {activeTool.replace(/^get_/, "").replace(/_/g, " ")}…
+          </span>
+        </div>
+      )}
       <div className="chat-input-bar">
+
         {/* Textarea — always visible with consistent placeholder, live fills text */}
         <textarea
           ref={textareaRef}

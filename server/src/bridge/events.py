@@ -179,3 +179,27 @@ async def turn_end():
     )
 
 
+#
+# Tool Activity
+#
+
+
+async def tool_start(name: str):
+    await broadcaster.broadcast(
+        {
+            "type": "tool_start",
+            "tool": name,
+        }
+    )
+
+
+async def tool_end(name: str):
+    await broadcaster.broadcast(
+        {
+            "type": "tool_end",
+            "tool": name,
+        }
+    )
+
+
+

@@ -80,7 +80,7 @@ async def run_voice_loop(stop_event: threading.Event | None = None):
     history = []
 
     print(
-        "[VoiceLoop] Akari companion voice loop is live. Say 'stop' to exit.\n"
+        "[VoiceLoop] Akari assistant voice loop is live. Say 'stop' to exit.\n"
     )
 
     while True:

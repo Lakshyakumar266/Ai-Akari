@@ -82,62 +82,204 @@ def classic_chat(prompt: str, history: list, model: str = DEFAULT_MODEL) -> str:
         return ""
 
 
+import asyncio
+import threading
+from typing import Callable
+from src.tools import tool_registry
+
+
 def stream_chat(
-    prompt: str, history: list, model: str = DEFAULT_MODEL
+    prompt: str,
+    history: list,
+    model: str = DEFAULT_MODEL,
+    tools_enabled: bool = False,
+    max_tool_rounds: int = 5,
+    on_tool_activity: Callable[[str, str], None] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> Generator[str, None, None]:
-    """Yields text tokens as Free.ai generates them in real-time."""
+    """Yields text tokens as Free.ai generates them in real-time, with optional tool calling."""
     key, base_url = get_freeai_credentials()
     messages = _format_messages(prompt, history)
     chosen_model = model or DEFAULT_MODEL
-    url = f"{base_url.rstrip('/')}/chat/"
-    print(f"[FreeAI] stream_chat starting with model: '{chosen_model}'")
+    print(
+        f"[FreeAI] stream_chat starting with model: '{chosen_model}' (tools_enabled={tools_enabled})"
+    )
 
-    try:
-        with httpx.stream(
-            "POST",
-            url,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": chosen_model,
-                "messages": messages,
-                "temperature": 0.9,
-                "stream": True,
-            },
-            timeout=60.0,
-        ) as resp:
-            if resp.status_code >= 400:
-                resp.read()
-                try:
-                    err_json = resp.json()
-                    err_data = err_json.get("error", {})
-                    err_msg = err_data.get("error") if isinstance(err_data, dict) else str(err_data)
-                except Exception:
-                    err_msg = resp.text
-                print(f"[FreeAI] Stream Error ({resp.status_code}): {err_msg}")
-                yield f"[Free.ai Error: {err_msg}]"
+    if not tools_enabled:
+        url = f"{base_url.rstrip('/')}/chat/"
+        try:
+            with httpx.stream(
+                "POST",
+                url,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": chosen_model,
+                    "messages": messages,
+                    "temperature": 0.9,
+                    "stream": True,
+                },
+                timeout=60.0,
+            ) as resp:
+                if resp.status_code >= 400:
+                    resp.read()
+                    try:
+                        err_json = resp.json()
+                        err_data = err_json.get("error", {})
+                        err_msg = (
+                            err_data.get("error")
+                            if isinstance(err_data, dict)
+                            else str(err_data)
+                        )
+                    except Exception:
+                        err_msg = resp.text
+                    print(f"[FreeAI] Stream Error ({resp.status_code}): {err_msg}")
+                    yield f"[Free.ai Error: {err_msg}]"
+                    return
+
+                for line in resp.iter_lines():
+                    if cancel_event is not None and cancel_event.is_set():
+                        return
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                            choices = chunk.get("choices", [])
+                            if choices and choices[0].get("delta"):
+                                delta = choices[0]["delta"].get("content")
+                                if delta:
+                                    yield delta
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as err:
+            print(f"[FreeAI] Stream exception: {err}")
+        return
+
+    # Tool calling enabled path via OpenAI-compatible client
+    tools = tool_registry.get_tool_definitions(only_enabled=True)
+    if not tools:
+        return
+
+    client = get_client()
+    current_round = 0
+
+    while current_round < max_tool_rounds:
+        current_round += 1
+        if cancel_event is not None and cancel_event.is_set():
+            return
+
+        try:
+            stream = client.chat.completions.create(
+                model=chosen_model,
+                messages=messages,
+                tools=tools,
+                temperature=0.9,
+                stream=True,
+            )
+        except Exception as err:
+            print(f"[FreeAI] Tool stream error with model '{chosen_model}': {err}")
+            yield f"[Free.ai Error: Model '{chosen_model}' failed: {err}]"
+            return
+
+        tool_calls_dict: dict[int, dict] = {}
+        finish_reason = None
+
+        for chunk in stream:
+            if cancel_event is not None and cancel_event.is_set():
                 return
 
-            for line in resp.iter_lines():
-                if not line:
-                    continue
-                if line.startswith("data: "):
-                    data_str = line[6:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data_str)
-                        choices = chunk.get("choices", [])
-                        if choices and choices[0].get("delta"):
-                            delta = choices[0]["delta"].get("content")
-                            if delta:
-                                yield delta
-                    except json.JSONDecodeError:
-                        continue
-    except Exception as err:
-        print(f"[FreeAI] Stream exception: {err}")
+            if not chunk.choices:
+                continue
+
+            choice = chunk.choices[0]
+            finish_reason = choice.finish_reason
+
+            if choice.delta.tool_calls:
+                for tc in choice.delta.tool_calls:
+                    idx = tc.index if tc.index is not None else len(tool_calls_dict)
+                    if idx not in tool_calls_dict:
+                        tool_calls_dict[idx] = {
+                            "id": tc.id or f"tc_{idx}",
+                            "name": tc.function.name if tc.function else "",
+                            "arguments": (
+                                tc.function.arguments or "" if tc.function else ""
+                            ),
+                        }
+                    else:
+                        if tc.id:
+                            tool_calls_dict[idx]["id"] = tc.id
+                        if tc.function and tc.function.name:
+                            tool_calls_dict[idx]["name"] = tc.function.name
+                        if tc.function and tc.function.arguments:
+                            tool_calls_dict[idx]["arguments"] += (
+                                tc.function.arguments
+                            )
+
+            if choice.delta.content:
+                yield choice.delta.content
+
+        if not tool_calls_dict or finish_reason != "tool_calls":
+            break
+
+        assistant_tool_calls = [
+            {
+                "id": t["id"],
+                "type": "function",
+                "function": {"name": t["name"], "arguments": t["arguments"]},
+            }
+            for t in tool_calls_dict.values()
+        ]
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": assistant_tool_calls,
+        })
+
+        for t in tool_calls_dict.values():
+            if cancel_event is not None and cancel_event.is_set():
+                return
+
+            t_name = t["name"]
+            t_args = t["arguments"]
+            t_id = t["id"]
+
+            if on_tool_activity:
+                try:
+                    on_tool_activity(t_name, "start")
+                except Exception:
+                    pass
+
+            print(f"[FreeAI Tool] Executing '{t_name}' (args: {t_args})")
+            try:
+                loop = asyncio.new_event_loop()
+                result = loop.run_until_complete(
+                    tool_registry.execute_tool(t_name, t_args, timeout=10.0)
+                )
+                loop.close()
+            except Exception as e:
+                result = {"status": "error", "error": str(e)}
+
+            print(f"[FreeAI Tool] Executed '{t_name}' -> {result}")
+
+            if on_tool_activity:
+                try:
+                    on_tool_activity(t_name, "end")
+                except Exception:
+                    pass
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": t_id,
+                "name": t_name,
+                "content": json.dumps(result),
+            })
+
 
 
 def classify_emotion(text: str, model: str = DEFAULT_MODEL) -> str:

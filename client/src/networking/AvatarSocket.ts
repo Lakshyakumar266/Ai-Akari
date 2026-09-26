@@ -54,6 +54,14 @@ class AvatarSocket {
     const model = params.get("model") || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
     return { provider, model };
   })();
+  private pendingToolCalling: { enabled: boolean; maxCalls?: number } | null = (() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const paramTools = params.get("tools");
+    const storedTools = localStorage.getItem("akari_tool_calling_enabled");
+    const enabled = paramTools !== null ? paramTools === "true" : storedTools === "true";
+    return { enabled, maxCalls: 5 };
+  })();
 
   /**
    * Returns the current connection status to the Python backend server.
@@ -128,6 +136,28 @@ class AvatarSocket {
     }
   }
 
+  /**
+   * Sets whether Tool Calling is enabled on the backend.
+   */
+  setToolCalling(enabled: boolean, maxCalls?: number) {
+    this.pendingToolCalling = { enabled, maxCalls };
+    if (this.lastConfig) {
+      this.lastConfig = {
+        ...this.lastConfig,
+        tool_calling_enabled: enabled,
+        max_tool_calls: maxCalls ?? this.lastConfig.max_tool_calls,
+      };
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log(`[AvatarSocket] Sending set_tool_calling: enabled=${enabled}, maxCalls=${maxCalls}`);
+      this.send({
+        type: "set_tool_calling",
+        enabled,
+        max_calls: maxCalls,
+      });
+    }
+  }
+
   connect() {
     if (
       this.socket &&
@@ -161,7 +191,12 @@ class AvatarSocket {
       if (this.pendingLlmProvider) {
         this.setLlmProvider(this.pendingLlmProvider.provider, this.pendingLlmProvider.model);
       }
+      // Synchronize tool calling state with server
+      if (this.pendingToolCalling) {
+        this.setToolCalling(this.pendingToolCalling.enabled, this.pendingToolCalling.maxCalls);
+      }
     };
+
 
     this.socket.onmessage = (message) => {
       // -----------------------------------------------------------------------

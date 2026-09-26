@@ -2,7 +2,7 @@
 
 ## 1. Overview & Objective
 
-This specification details the architecture, visual design system, and client-server protocol for the **sidebar navigation, screen views (Overview, Chat, Stream, Gallery), synchronized theming, and dynamic conversation mode switching** in the Akari Watanabe AI Companion.
+This specification details the architecture, visual design system, and client-server protocol for the **sidebar navigation, screen views (Overview, Chat, Stream, Gallery), synchronized theming, and dynamic conversation mode switching** in the Akari Watanabe AI assistant.
 
 The primary design objectives are:
 1. **Model-Centric Layout**: Provide persistent, low-noise navigation that keeps the 3D VRM avatar as the focal center of the experience.

@@ -16,3 +16,9 @@ EMOTION_SYNC_MODE = "synced"
 #   - Chat Screen   -> client sends ENABLE_CHAT_INPUT=True  (client-driven text/voice chat)
 #   - Stream Screen -> client sends ENABLE_CHAT_INPUT=False (server-side mic & audio streaming)
 ENABLE_CHAT_INPUT = True
+
+# Tool Calling / Function Calling Configuration:
+# Global switch: True by default for supported models
+TOOL_CALLING_ENABLED = True
+MAX_TOOL_CALL_ROUNDS = 5
+TOOL_EXECUTION_TIMEOUT = 10.0

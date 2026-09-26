@@ -1,6 +1,6 @@
 # AiAkari Core Server
 
-A local voice companion that lets you talk with **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*). Your speech is transcribed on-device, replies are streamed from Mistral with a character system prompt, and Fish Audio speaks the response back—often before the full text is finished.
+A local voice assistant that lets you talk with **Akari Watanabe** (*More Than a Married Couple, But Not Lovers*). Your speech is transcribed on-device, replies are streamed from Mistral with a character system prompt, and Fish Audio speaks the response back—often before the full text is finished.
 
 ## Features
 
@@ -46,7 +46,7 @@ From the project root:
 uv run src/main.py
 ```
 
-You should see `Akari companion is live. Say 'stop' to exit.` After calibration, **Speak now...** means the app is listening. Replies print as `Akari:` and play through mpv.
+You should see `Akari is live. Say 'stop' to exit.` After calibration, **Speak now...** means the app is listening. Replies print as `Akari:` and play through mpv.
 
 **Exit:** say **stop**, **exit**, **goodbye**, or **quit**, or press `Ctrl+C`.
 
@@ -73,7 +73,7 @@ Persona and exit phrases live in `src/prompts/system_prompt_akari.py`.
 ## Project layout
 
 ```
-AkariWattnabe-companion/
+AkariWattnabe/
 ├── bin/mpv-windows/     # mpv for streaming audio (Windows)
 ├── src/
 │   ├── main.py          # Voice loop entry point

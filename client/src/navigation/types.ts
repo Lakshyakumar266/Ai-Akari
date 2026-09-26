@@ -5,6 +5,7 @@ export interface NavigationState {
   character: string;
   provider: string;
   model: string;
+  tools: boolean;
 }
 
 export type ThemeMode = "dark" | "light";

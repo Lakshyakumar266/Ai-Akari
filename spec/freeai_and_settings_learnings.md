@@ -2,7 +2,7 @@
 
 ## 1. Overview & Objective
 
-This document formalizes the architectural learnings, endpoint discoveries, protocol designs, and interface decisions made during the integration of **Free.ai** as a secondary LLM provider and the creation of the dedicated **Settings Page** in the Akari Watanabe AI Companion.
+This document formalizes the architectural learnings, endpoint discoveries, protocol designs, and interface decisions made during the integration of **Free.ai** as a secondary LLM provider and the creation of the dedicated **Settings Page** in the Akari Watanabe AI assistant.
 
 Reference Codebase Links:
 - `./server/src/llm/freeai_model.py`

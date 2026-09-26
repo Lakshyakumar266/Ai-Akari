@@ -27,7 +27,7 @@ function CameraRig({ isOverview }: { isOverview: boolean }) {
 }
 
 function AppContent() {
-  const { screen, character, provider, model, navigate, updateLlm } = useNavigation();
+  const { screen, character, provider, model, tools, navigate, updateLlm, updateToolCalling } = useNavigation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Synchronize dynamic conversation mode with backend whenever screen changes:
@@ -145,7 +145,9 @@ function AppContent() {
           <SettingsScreen
             currentProvider={provider}
             currentModel={model}
+            currentToolsEnabled={tools}
             onUpdateLlm={updateLlm}
+            onUpdateTools={updateToolCalling}
           />
         )}
 

@@ -2,7 +2,7 @@
 
 ## 1. Overview & Objective
 
-This specification details the architecture, data contracts, and design principles for the real-time audio-synchronized subtitle system in the Akari Watanabe AI Companion.
+This specification details the architecture, data contracts, and design principles for the real-time audio-synchronized subtitle system in the Akari Watanabe AI assistant.
 
 The primary objective is to present dialogue on screen in **strictly 2-line visual units** that stay on screen for the exact duration of the spoken audio for those two lines, highlight words sequentially in sync with speech, and transition to the next two lines precisely when the corresponding audio finishes playing.
 

@@ -20,7 +20,7 @@ async def run():
 
     try:
         print(
-            "[Runtime] Akari companion server ready.\n"
+            "[Runtime] AiAkari server ready.\n"
             "[Runtime] Mode is managed dynamically by connected client:\n"
             "          - Chat Mode:   ENABLE_CHAT_INPUT=True  (client-driven conversation)\n"
             "          - Stream Mode: ENABLE_CHAT_INPUT=False (server-side mic & TTS loop)\n"
