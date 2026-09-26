@@ -12,20 +12,74 @@ Modes (configured via `src.config.EMOTION_SYNC_MODE`):
 import re
 from typing import Callable, Optional
 from src.config import EMOTION_SYNC_MODE
-from src.bridge.events import emotion
 
-# Matches any of the 6 valid emotion tags anywhere in dialogue text
+# Matches any bracketed emotion tag or word, e.g. [happy], [annoyed], [blush], [sigh]
 EMOTION_TAG_PATTERN = re.compile(
-    r"\[(happy|sad|angry|surprised|relaxed|neutral)\]",
+    r"\[([a-zA-Z_\-]+)\]",
     re.IGNORECASE,
 )
 
 VALID_EMOTIONS = {"Happy", "Sad", "Angry", "Surprised", "Relaxed", "Neutral"}
 
+# Comprehensive emotion aliases mapped to the 6 canonical VRM emotions (aligned with client EmotionController)
+EMOTION_ALIASES: dict[str, str] = {
+    # Exact 6 VRM emotions
+    "neutral": "Neutral",
+    "happy": "Happy",
+    "sad": "Sad",
+    "angry": "Angry",
+    "relaxed": "Relaxed",
+    "surprised": "Surprised",
+
+    # Tsundere / expressive aliases
+    "annoyed": "Angry",
+    "mad": "Angry",
+    "furious": "Angry",
+    "pouting": "Angry",
+    "irritated": "Angry",
+    "grumpy": "Angry",
+
+    "blush": "Happy",
+    "flustered": "Happy",
+    "smirk": "Happy",
+    "teasing": "Happy",
+    "joy": "Happy",
+    "embarrassed": "Happy",
+    "excited": "Happy",
+
+    "shocked": "Surprised",
+    "confused": "Surprised",
+    "gasp": "Surprised",
+    "amazed": "Surprised",
+
+    "unhappy": "Sad",
+    "crying": "Sad",
+    "sulky": "Sad",
+    "depressed": "Sad",
+    "hurt": "Sad",
+
+    "calm": "Relaxed",
+    "sleepy": "Relaxed",
+    "tired": "Relaxed",
+}
+
+
+def resolve_emotion(tag_text: str) -> str:
+    """Resolves any emotion tag or alias into one of the 6 canonical VRM emotions."""
+    clean_tag = tag_text.strip().lower()
+    return EMOTION_ALIASES.get(clean_tag, "Neutral")
+
 
 def strip_all_emotion_tags(text: str) -> str:
-    """Removes all emotion brackets from text so TTS does not speak them."""
-    return EMOTION_TAG_PATTERN.sub("", text).strip()
+    """Removes all emotion brackets and markdown formatting from text so TTS and subtitles are completely clean."""
+    if not text:
+        return ""
+    # Strip any [tag]
+    cleaned = EMOTION_TAG_PATTERN.sub("", text)
+    # Strip Markdown asterisks for actions/emphasis e.g. *any* -> any, *sigh*
+    cleaned = re.sub(r"\*+([^*]+)\*+", r"\1", cleaned)
+    cleaned = cleaned.replace("*", "")
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def extract_dialogue_and_emotion(raw_text: str) -> tuple[str, Optional[str]]:
@@ -38,9 +92,9 @@ def extract_dialogue_and_emotion(raw_text: str) -> tuple[str, Optional[str]]:
     detected_emotion = None
 
     if matches:
-        raw_name = matches[0].group(1).capitalize()
-        if raw_name in VALID_EMOTIONS:
-            detected_emotion = raw_name
+        raw_name = matches[0].group(1).lower()
+        if raw_name in EMOTION_ALIASES:
+            detected_emotion = EMOTION_ALIASES[raw_name]
 
     clean_text = strip_all_emotion_tags(raw_text)
     return clean_text, detected_emotion
@@ -59,7 +113,7 @@ def split_dialogue_units_with_emotions(
     """
     # Split raw_text by emotion tag matches while retaining the tags
     tokens = re.split(
-        r"(\[(?:happy|sad|angry|surprised|relaxed|neutral)\])",
+        r"(\[[a-zA-Z_\-]+\])",
         raw_text,
         flags=re.IGNORECASE,
     )
@@ -72,11 +126,11 @@ def split_dialogue_units_with_emotions(
             continue
         tag_match = EMOTION_TAG_PATTERN.fullmatch(token.strip())
         if tag_match:
-            tag_name = tag_match.group(1).capitalize()
-            if tag_name in VALID_EMOTIONS:
-                current_emotion = tag_name
+            tag_name = tag_match.group(1).lower()
+            if tag_name in EMOTION_ALIASES:
+                current_emotion = EMOTION_ALIASES[tag_name]
         else:
-            text = token.strip()
+            text = strip_all_emotion_tags(token)
             if text:
                 sections.append((text, current_emotion))
 
@@ -134,12 +188,14 @@ class EmotionFeatureManager:
         matches = list(EMOTION_TAG_PATTERN.finditer(buffer))
         if matches:
             for match in matches:
-                tag_emotion = match.group(1).capitalize()
-                if tag_emotion in VALID_EMOTIONS:
-                    self.detected_emotion = tag_emotion
+                tag_name = match.group(1).lower()
+                if tag_name in EMOTION_ALIASES:
+                    resolved = EMOTION_ALIASES[tag_name]
+                    self.detected_emotion = resolved
                     if self.mode == "stream":
-                        # print(f"\n[Akari Emotion Tag - Stream Mode] {tag_emotion}")
-                        dispatch_fn(emotion(tag_emotion))
+                        from src.bridge.events import emotion
+                        # print(f"\n[Akari Emotion Tag - Stream Mode] {resolved} (from [{tag_name}])")
+                        dispatch_fn(emotion(resolved))
 
             buffer = EMOTION_TAG_PATTERN.sub("", buffer)
 
@@ -152,6 +208,7 @@ class EmotionFeatureManager:
         """
         if self.mode == "synced" and self.detected_emotion:
             print(f"\n[Akari Emotion - Synced Mode] Activating {self.detected_emotion} with speech start")
+            from src.bridge.events import emotion
             dispatch_fn(emotion(self.detected_emotion))
 
     def on_speech_concluded(self, dispatch_fn: Callable):
@@ -162,4 +219,5 @@ class EmotionFeatureManager:
         """
         if self.mode == "stream":
             print("\n[Akari Emotion - Stream Mode] Resetting to Neutral on server")
+            from src.bridge.events import emotion
             dispatch_fn(emotion("Neutral"))

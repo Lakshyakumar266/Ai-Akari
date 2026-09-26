@@ -811,14 +811,14 @@ BUILTIN_TOOLS: list[Tool] = [
     Tool(
         name="get_available_tools",
         user_friendly_name="Available Tools",
-        description="Returns a complete list of all currently available tools, capabilities, and descriptions. Invoke this to discover what real-time tools you can use.",
+        description="Returns a complete list of all currently available tools, capabilities, and descriptions.",
         parameters={
             "type": "object",
             "properties": {},
             "required": [],
         },
         func=get_available_tools,
-        enabled=True,
+        enabled=False,
     ),
     Tool(
         name="get_current_time",
@@ -844,7 +844,7 @@ BUILTIN_TOOLS: list[Tool] = [
     Tool(
         name="get_timezone_info",
         user_friendly_name="Timezone Details",
-        description="Returns detailed timezone metadata including IANA timezone code, UTC offset (e.g. UTC+05:30), daylight saving status, and current time for any location or user's local timezone.",
+        description="Returns detailed timezone metadata, IANA code, and UTC offset (e.g. UTC+05:30) for any location or user's local timezone.",
         parameters={
             "type": "object",
             "properties": {
@@ -861,7 +861,7 @@ BUILTIN_TOOLS: list[Tool] = [
     Tool(
         name="convert_time",
         user_friendly_name="Timezone Converter",
-        description="Accurately converts a specific time between two cities, countries, or timezones (e.g. '3:00 PM' from 'New York' to 'Tokyo'). Handles day offsets and time differences.",
+        description="Converts a specific time between two cities, countries, or timezones (e.g. '3:00 PM' from 'New York' to 'Tokyo'). Handles day offsets and time differences.",
         parameters={
             "type": "object",
             "properties": {

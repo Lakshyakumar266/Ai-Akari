@@ -26,10 +26,22 @@ const HOLD_AFTER_SPEECH_END_MS = 1500;
 /** Duration of the smooth fade-out animation. */
 const FADEOUT_MS = 450;
 
+// ─── Helper: Clean subtitle text (strips bracketed tags like [annoyed] and markdown asterisks) ──
+
+function cleanSubtitleText(text: string): string {
+  if (!text) return "";
+  // Strip any bracketed emotion/action tags, e.g. [annoyed], [happy], [sigh]
+  let cleaned = text.replace(/\[[a-zA-Z_\-]+\]/g, "");
+  // Strip markdown formatting like *emphasis* -> emphasis, and rogue asterisks
+  cleaned = cleaned.replace(/\*+([^*]+)\*+/g, "$1").replace(/\*/g, "");
+  return cleaned.trim();
+}
+
 // ─── Helper: Format text into at most 2 visual lines ──────────────────────────
 
 function formatTwoLines(text: string): { line1: string[]; line2: string[]; allWords: string[] } {
-  const allWords = text.trim().split(/\s+/).filter(Boolean);
+  const cleaned = cleanSubtitleText(text);
+  const allWords = cleaned.split(/\s+/).filter(Boolean);
   if (allWords.length === 0) {
     return { line1: [], line2: [], allWords: [] };
   }
