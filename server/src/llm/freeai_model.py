@@ -27,9 +27,27 @@ def get_client() -> OpenAI:
     return OpenAI(base_url=base_url, api_key=key or "none", timeout=45.0)
 
 
-def _format_messages(prompt: str, history: list) -> list[dict]:
+FREEAI_TOOL_SYSTEM_PROMPT = """You are Akari Watanabe, an anime tsundere companion. Stay fully in character.
+
+CRITICAL TOOL CALLING RULES:
+- You have real-time access to external tools/functions.
+- When the user asks for real-time information (e.g. current time, current date, timezone, calculations, or system status), you MUST invoke the appropriate function call immediately.
+- NEVER output conversational text or excuses like "wait a sec", "let me check", or "just a moment" instead of calling the tool. Call the tool directly!
+- You will produce spoken dialogue with emotion tags ONLY AFTER receiving the tool result.
+
+PERSONALITY & OUTPUT FORMAT:
+- Tsundere dynamic: teased, haughty, and a little bossy on the surface, but secretly caring and flustered.
+- EXACT ALLOWED EMOTION TAGS: You may ONLY use: [happy], [sad], [angry], [surprised], [relaxed], or [neutral].
+- When annoyed or giving attitude, use [angry].
+- Reply as spoken dialogue only after emotion tags.
+- NEVER use asterisks "*" or action descriptions or markdown formatting characters.
+"""
+
+
+def _format_messages(prompt: str, history: list, tools_enabled: bool = False) -> list[dict]:
     """Converts mixed history items (Mistral UserMessage/AssistantMessage or dicts) into OpenAI standard format."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
+    system_content = FREEAI_TOOL_SYSTEM_PROMPT if tools_enabled else SYSTEM_PROMPT_AKARI_ASSISTANT
+    messages = [{"role": "system", "content": system_content}]
 
     for item in history:
         if isinstance(item, dict):
@@ -99,7 +117,7 @@ def stream_chat(
 ) -> Generator[str, None, None]:
     """Yields text tokens as Free.ai generates them in real-time, with optional tool calling."""
     key, base_url = get_freeai_credentials()
-    messages = _format_messages(prompt, history)
+    messages = _format_messages(prompt, history, tools_enabled=tools_enabled)
     chosen_model = model or DEFAULT_MODEL
     print(
         f"[FreeAI] stream_chat starting with model: '{chosen_model}' (tools_enabled={tools_enabled})"
@@ -119,9 +137,8 @@ def stream_chat(
                     "model": chosen_model,
                     "messages": messages,
                     "temperature": 0.9,
-                    "stream": True,
                 },
-                timeout=60.0,
+                stream=True,
             ) as resp:
                 if resp.status_code >= 400:
                     resp.read()
@@ -136,7 +153,10 @@ def stream_chat(
                     except Exception:
                         err_msg = resp.text
                     print(f"[FreeAI] Stream Error ({resp.status_code}): {err_msg}")
-                    yield f"[Free.ai Error: {err_msg}]"
+                    if resp.status_code == 402 or "402" in str(err_msg):
+                        yield "[Free.ai Notice: No tokens remaining on free pool for today. Switch to OpenRouter or try again tomorrow.]"
+                    else:
+                        yield f"[Free.ai Error: {err_msg}]"
                     return
 
                 for line in resp.iter_lines():
@@ -229,48 +249,61 @@ def stream_chat(
                 stream=True,
             )
         except Exception as err:
+            err_str = str(err)
             print(f"[FreeAI] Tool stream error with model '{chosen_model}': {err}")
-            yield f"[Free.ai Error: Model '{chosen_model}' failed: {err}]"
+            if "402" in err_str:
+                yield "[Free.ai Notice: No tokens remaining on free pool for today. Switch to OpenRouter or try again tomorrow.]"
+            else:
+                yield f"[Free.ai Error: Model '{chosen_model}' failed: {err}]"
             return
 
         tool_calls_dict: dict[int, dict] = {}
         finish_reason = None
         round_content_chunks: list[str] = []
 
-        for chunk in stream:
-            if cancel_event is not None and cancel_event.is_set():
-                return
+        try:
+            for chunk in stream:
+                if cancel_event is not None and cancel_event.is_set():
+                    return
 
-            if not chunk.choices:
-                continue
+                if not chunk.choices:
+                    continue
 
-            choice = chunk.choices[0]
-            if choice.finish_reason:
-                finish_reason = choice.finish_reason
+                choice = chunk.choices[0]
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
 
-            if choice.delta.tool_calls:
-                for tc in choice.delta.tool_calls:
-                    idx = tc.index if tc.index is not None else len(tool_calls_dict)
-                    if idx not in tool_calls_dict:
-                        tool_calls_dict[idx] = {
-                            "id": tc.id or f"tc_{idx}",
-                            "name": tc.function.name if tc.function else "",
-                            "arguments": (
-                                tc.function.arguments or "" if tc.function else ""
-                            ),
-                        }
-                    else:
-                        if tc.id:
-                            tool_calls_dict[idx]["id"] = tc.id
-                        if tc.function and tc.function.name:
-                            tool_calls_dict[idx]["name"] = tc.function.name
-                        if tc.function and tc.function.arguments:
-                            tool_calls_dict[idx]["arguments"] += (
-                                tc.function.arguments
-                            )
+                if choice.delta.tool_calls:
+                    for tc in choice.delta.tool_calls:
+                        idx = tc.index if tc.index is not None else len(tool_calls_dict)
+                        if idx not in tool_calls_dict:
+                            tool_calls_dict[idx] = {
+                                "id": tc.id or f"tc_{idx}",
+                                "name": tc.function.name if tc.function else "",
+                                "arguments": (
+                                    tc.function.arguments or "" if tc.function else ""
+                                ),
+                            }
+                        else:
+                            if tc.id:
+                                tool_calls_dict[idx]["id"] = tc.id
+                            if tc.function and tc.function.name:
+                                tool_calls_dict[idx]["name"] = tc.function.name
+                            if tc.function and tc.function.arguments:
+                                tool_calls_dict[idx]["arguments"] += (
+                                    tc.function.arguments
+                                )
 
-            if choice.delta.content:
-                round_content_chunks.append(choice.delta.content)
+                if choice.delta.content:
+                    round_content_chunks.append(choice.delta.content)
+        except Exception as err:
+            err_str = str(err)
+            print(f"[FreeAI] Stream iteration error with model '{chosen_model}': {err}")
+            if "402" in err_str:
+                yield "[Free.ai Notice: No tokens remaining on free pool for today. Switch to OpenRouter or try again tomorrow.]"
+            else:
+                yield f"[Free.ai Error: {err}]"
+            return
 
         # If no tool calls were requested, this is the final conversational response
         if not tool_calls_dict:
