@@ -40,7 +40,6 @@ AVAILABLE_PROVIDERS = [
         "default_model": "qwen7b",
         "models": [
             {"id": "qwen7b", "name": "Qwen 2.5 7B (Fast / Free)"},
-            {"id": "qwen/qwen3.6-35b-a3b", "name": "Qwen 3.6 35B A3B"},
             {"id": "qwen3-8b", "name": "Qwen 3 8B"},
             {"id": "mistral", "name": "Mistral 7B"},
             {"id": "deepseek-r1", "name": "DeepSeek R1 Distill"},
