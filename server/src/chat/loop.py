@@ -164,7 +164,7 @@ async def process_chat_message(
             loop.call_soon_threadsafe(asyncio.create_task, tool_end(tool_name))
 
     def stream_and_chunk():
-        print("[Chat] Akari: ", end="", flush=True)
+        started_printing = False
         buffer = ""
         current_sentence = ""
 
@@ -180,6 +180,10 @@ async def process_chat_message(
                 if cancel_event.is_set():
                     print("\n[Chat] Stream cancelled by user stop request.")
                     return
+
+                if not started_printing:
+                    print("[Chat] Akari: ", end="", flush=True)
+                    started_printing = True
 
                 print(token, end="", flush=True)
                 full_reply.append(token)

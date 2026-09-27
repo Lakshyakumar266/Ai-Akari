@@ -7,3 +7,10 @@ export type {
   VisemeName,
 } from "./types";
 export { ANIMATIONS, EMOTIONS } from "./types";
+export {
+  useCharacterControls,
+  characterControlsStore,
+  DEFAULT_POSE,
+  type CharacterPose,
+  type CharacterControlsState,
+} from "./characterControlsStore";
