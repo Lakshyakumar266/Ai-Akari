@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useControls } from "leva";
 import * as THREE from "three";
 
 import { loadAvatar } from "./AvatarLoader";
@@ -12,6 +11,7 @@ import { LookAtController } from "./LookAtController";
 import { LipSyncController } from "./LipSyncController";
 import { EmotionController } from "./EmotionController";
 import { PoseController } from "./PoseController";
+import { useCharacterControls } from "./characterControlsStore";
 
 import {
   AvatarContext,
@@ -19,9 +19,7 @@ import {
 } from "./AvatarContext";
 
 import {
-  ANIMATIONS,
   DEFAULT_VRM_URL,
-  EMOTIONS,
   type AnimationName,
   type EmotionName,
 } from "./types";
@@ -30,60 +28,10 @@ export default function Character() {
   const [avatar, setAvatar] =
     useState<AvatarContextValue | null>(null);
 
-    const pose = useControls("Pose", {
-      armX: {
-        value: 5,
-        min: -90,
-        max: 90,
-        step: 1,
-      },
-    
-      armY: {
-        value: 8,
-        min: -90,
-        max: 90,
-        step: 1,
-      },
-    
-      armZ: {
-        value: 72,
-        min: -90,
-        max: 90,
-        step: 1,
-      },
-    });
+  const { animation, emotion, pose } = useCharacterControls();
 
   const cameraTarget = useRef(
     new THREE.Vector3()
-  );
-
-  //
-  // Leva
-  //
-
-  const animationOptions = [
-    "None",
-    ...Object.keys(ANIMATIONS),
-  ] as const;
-
-  const { animation } = useControls(
-    "Animation",
-    {
-      animation: {
-        value: "None",
-        options: animationOptions,
-      },
-    }
-  );
-
-  const { emotion } = useControls(
-    "Emotion",
-    {
-      emotion: {
-        value: "Neutral" satisfies EmotionName,
-        options: Object.keys(EMOTIONS),
-      },
-    }
   );
 
   //

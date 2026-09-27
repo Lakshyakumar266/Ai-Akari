@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import {
-  IconMenu2,
   IconSun,
   IconMoon,
   IconUserSquareRounded,
@@ -8,6 +7,8 @@ import {
   IconCube,
   IconCamera,
   IconSettings,
+  IconBadgeCc,
+  IconMenu,
 } from "@tabler/icons-react";
 import type { ScreenType } from "./types";
 import { useTheme } from "./ThemeContext";
@@ -20,6 +21,8 @@ interface SidebarProps {
   onNavigate: (screen: ScreenType) => void;
   isOpen?: boolean;
   onToggleCollapse?: () => void;
+  showSubtitles?: boolean;
+  onToggleSubtitles?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,6 +30,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   isOpen = true,
   onToggleCollapse,
+  showSubtitles = true,
+  onToggleSubtitles,
 }) => {
   const { theme, setTheme } = useTheme();
   const [serverStatus, setServerStatus] = useState<ConnectionStatus>(
@@ -50,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title="Hide Sidebar"
           onClick={onToggleCollapse}
         >
-          <IconMenu2 size={19} stroke={1.8} />
+          <IconMenu size={19} stroke={1.8} />
         </button>
 
         <nav className="sidebar-nav-list" aria-label="Main Navigation">
@@ -109,8 +114,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             serverStatus === "connected"
               ? "Server Connected (ws://127.0.0.1:8765)"
               : serverStatus === "connecting"
-              ? "Connecting to server..."
-              : "Server Disconnected (Offline) — Click to reconnect"
+                ? "Connecting to server..."
+                : "Server Disconnected (Offline) — Click to reconnect"
           }
           aria-label={`Server status: ${serverStatus}`}
           onClick={() => {
@@ -121,6 +126,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           <span className="sidebar-status-ping" />
           <span className="sidebar-status-dot" />
+        </button>
+
+        {/* Subtitles Toggle */}
+        <button
+          type="button"
+          className={`sidebar-subtitle-btn ${showSubtitles ? "active" : "inactive"}`}
+          onClick={onToggleSubtitles}
+          title={showSubtitles ? "Subtitles: ON (Click to turn off)" : "Subtitles: OFF (Click to turn on)"}
+          aria-label={showSubtitles ? "Disable subtitles" : "Enable subtitles"}
+          aria-pressed={showSubtitles}
+        >
+          <IconBadgeCc size={20} stroke={1.8} />
         </button>
 
         <div className="sidebar-theme-group" role="group" aria-label="Theme mode switcher">

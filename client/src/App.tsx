@@ -3,7 +3,6 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import Scene from "./components/scene";
 import SubtitleOverlay from "./components/SubtitleOverlay";
-import { Leva } from "leva";
 import { audioPlayer } from "./audio/AudioPlayer";
 import { useEffect, useState } from "react";
 import { IconEye } from "@tabler/icons-react";
@@ -18,17 +17,37 @@ import { SettingsScreen } from "./components/screens/SettingsScreen";
 import { avatarSocket } from "./networking/AvatarSocket";
 import "./App.css";
 
-function CameraRig({ isOverview }: { isOverview: boolean }) {
+function CameraRig({ isFramed }: { isFramed: boolean }) {
   useFrame((state, delta) => {
-    const targetX = isOverview ? -0.26 : 0;
+    const targetX = isFramed ? -0.26 : 0;
     state.camera.position.x = THREE.MathUtils.damp(state.camera.position.x, targetX, 5, delta);
   });
   return null;
 }
 
+const SUBTITLES_STORAGE_KEY = "akari_subtitles_enabled";
+
 function AppContent() {
   const { screen, character, provider, model, tools, navigate, updateLlm, updateToolCalling } = useNavigation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const isFramed = screen === "characters" || screen === "galary";
+  const [showSubtitles, setShowSubtitles] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const saved = localStorage.getItem(SUBTITLES_STORAGE_KEY);
+    return saved !== null ? saved === "true" : true;
+  });
+
+  const handleToggleSubtitles = () => {
+    setShowSubtitles((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SUBTITLES_STORAGE_KEY, String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
 
   // Synchronize dynamic conversation mode with backend whenever screen changes:
   // - screen === "stream" -> Stream Mode (ENABLE_CHAT_INPUT=false: server mic voice loop)
@@ -62,6 +81,8 @@ function AppContent() {
         onNavigate={(targetScreen) => navigate(targetScreen, character)}
         isOpen={isSidebarOpen}
         onToggleCollapse={() => setIsSidebarOpen(false)}
+        showSubtitles={showSubtitles}
+        onToggleSubtitles={handleToggleSubtitles}
       />
 
       {/* ─── Floating Sidebar Reveal Button (Bottom Left) ────────────────── */}
@@ -84,7 +105,7 @@ function AppContent() {
             shadows
             dpr={[1, 2]}
             camera={{
-              position: [screen === "characters" ? -0.26 : 0, 1.35, 1.25],
+              position: [isFramed ? -0.26 : 0, 1.35, 1.25],
               fov: 26,
             }}
             gl={{
@@ -98,12 +119,12 @@ function AppContent() {
               gl.toneMappingExposure = 0.9;
             }}
           >
-            <CameraRig isOverview={screen === "characters"} />
+            <CameraRig isFramed={isFramed} />
             <Scene />
 
             <OrbitControls
               makeDefault
-              target={[screen === "characters" ? -0.26 : 0, 1.32, 0.2]}
+              target={[isFramed ? -0.26 : 0, 1.32, 0.2]}
               enableDamping
               dampingFactor={0.08}
               rotateSpeed={0.6}
@@ -152,10 +173,10 @@ function AppContent() {
         )}
 
         {/* Global subtitle overlay with dynamic height based on active screen */}
-        {screen !== "settings" && <SubtitleOverlay raised={screen === "chat"} />}
+        {screen !== "settings" && (
+          <SubtitleOverlay raised={screen === "chat"} enabled={showSubtitles} />
+        )}
       </main>
-
-      {screen !== "settings" && <Leva collapsed={true} />}
     </div>
   );
 }
