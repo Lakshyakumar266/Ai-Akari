@@ -85,11 +85,16 @@
   align-items: flex-end;
   gap: 6px;
   width: 100%;
-  max-width: 460px;
-  padding: 6px 6px 6px 18px;
+  max-width: 480px;
+  padding: 6px 6px 6px 8px;
   border-radius: 16px;
   contain: layout;
   transform: translateZ(0);
+}
+
+.chat-input-bar.dragging::before {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35) !important;
 }
 
 .chat-input-bar::before {
@@ -111,6 +116,141 @@
 
 .chat-input-bar:focus-within::before {
   border-color: var(--border-input-glass-focus);
+}
+
+/* ── Center / Main Column ─────────────────────────────────────────────────── */
+
+.chat-input-main-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Image Preview Chip ──────────────────────────────────────────────────── */
+
+.chat-image-preview-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 6px;
+  margin: 4px 0 6px 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: chipFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes chipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-image-thumb-wrapper {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.chat-image-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-image-remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, transform 0.12s;
+}
+
+.chat-image-remove-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+.chat-image-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chat-image-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-input-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.chat-image-size {
+  font-size: 11px;
+  color: var(--color-input-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Camera Button ───────────────────────────────────────────────────────── */
+
+.chat-btn-camera {
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.chat-btn-camera:hover:not(:disabled) {
+  color: var(--color-input-icon-hover);
+  background: var(--bg-input-icon-hover);
+}
+
+.chat-btn-camera.active {
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.chat-btn-camera:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.chat-btn-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Textarea ────────────────────────────────────────────────────────────── */

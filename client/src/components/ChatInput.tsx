@@ -17,10 +17,18 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { IconMicrophone, IconPlayerStopFilled, IconArrowUp } from "@tabler/icons-react";
+import {
+  IconMicrophone,
+  IconPlayerStopFilled,
+  IconArrowUp,
+  IconCamera,
+  IconX,
+  IconLoader2,
+} from "@tabler/icons-react";
 import { avatarSocket } from "../networking";
 import { avatarEvents } from "../networking/EventBus";
 import { speechQueue } from "../audio/SpeechQueue";
+import { processImageFile, type ProcessedImage } from "../utils/imageUtils";
 import "./ChatInput.css";
 
 const MAX_ROWS = 6;
@@ -36,10 +44,17 @@ export default function ChatInput() {
   const [isRecording, setIsRecording] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
 
+  // Image attachment state
+  const [attachedImage, setAttachedImage] = useState<ProcessedImage | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sendBtnRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isRespondingRef = useRef(false);
   const isRecordingRef = useRef(false);
+  const attachedImageRef = useRef<ProcessedImage | null>(null);
   const resizePendingRef = useRef(false);
 
   // Audio recording refs
@@ -48,6 +63,16 @@ export default function ChatInput() {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  useEffect(() => {
+    attachedImageRef.current = attachedImage;
+    if (!isRespondingRef.current) {
+      const hasText = (textareaRef.current?.value.trim().length ?? 0) > 0;
+      const canSubmit = hasText || attachedImage !== null;
+      if (sendBtnRef.current) sendBtnRef.current.disabled = !canSubmit;
+      setCanSend(canSubmit);
+    }
+  }, [attachedImage]);
+
   // Keep refs updated for fast access
   useEffect(() => {
     isRespondingRef.current = isResponding;
@@ -55,9 +80,10 @@ export default function ChatInput() {
       if (sendBtnRef.current) sendBtnRef.current.disabled = false;
       setCanSend(false);
     } else {
-      const has = (textareaRef.current?.value.trim().length ?? 0) > 0;
-      if (sendBtnRef.current) sendBtnRef.current.disabled = !has;
-      setCanSend(has);
+      const hasText = (textareaRef.current?.value.trim().length ?? 0) > 0;
+      const canSubmit = hasText || attachedImageRef.current !== null;
+      if (sendBtnRef.current) sendBtnRef.current.disabled = !canSubmit;
+      setCanSend(canSubmit);
     }
   }, [isResponding]);
 
@@ -167,6 +193,100 @@ export default function ChatInput() {
 
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
+  // ─── Image attachment handlers ──────────────────────────────────────────
+  const triggerFileInput = useCallback(() => {
+    if (isRespondingRef.current || isCompressing) return;
+    fileInputRef.current?.click();
+  }, [isCompressing]);
+
+  const handleFileInputChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        setIsCompressing(true);
+        const processed = await processImageFile(file);
+        setAttachedImage(processed);
+      } catch (err) {
+        console.error("[ChatInput] Image load error:", err);
+      } finally {
+        setIsCompressing(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        textareaRef.current?.focus();
+      }
+    },
+    [],
+  );
+
+  const handleRemoveImage = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAttachedImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    textareaRef.current?.focus();
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isRespondingRef.current) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (isRespondingRef.current) return;
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      try {
+        setIsCompressing(true);
+        const processed = await processImageFile(file);
+        setAttachedImage(processed);
+        textareaRef.current?.focus();
+      } catch (err) {
+        console.error("[ChatInput] Drag-drop image error:", err);
+      } finally {
+        setIsCompressing(false);
+      }
+    }
+  }, []);
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    if (isRespondingRef.current) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          try {
+            setIsCompressing(true);
+            const processed = await processImageFile(file, "Pasted_image.png");
+            setAttachedImage(processed);
+            textareaRef.current?.focus();
+          } catch (err) {
+            console.error("[ChatInput] Clipboard paste image error:", err);
+          } finally {
+            setIsCompressing(false);
+          }
+        }
+        break;
+      }
+    }
+  }, []);
+
   // ─── Send chat message ─────────────────────────────────────────────────
   const handleSend = useCallback(() => {
     const el = textareaRef.current;
@@ -178,7 +298,8 @@ export default function ChatInput() {
     }
 
     const trimmed = el.value.trim();
-    if (!trimmed) return;
+    const currentAttached = attachedImageRef.current;
+    if (!trimmed && !currentAttached) return;
 
     const params = new URLSearchParams(window.location.search);
     const provider = params.get("provider") || localStorage.getItem("akari_llm_provider") || "mistral";
@@ -192,8 +313,25 @@ export default function ChatInput() {
 
     const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    const messageText = trimmed || (currentAttached ? "Look at this image. What do you think?" : "");
+    const messageImage = currentAttached?.dataUri;
+
+    const attachments = currentAttached
+      ? [
+          {
+            type: "image" as const,
+            mime_type: "image/jpeg",
+            data: currentAttached.dataUri,
+            name: currentAttached.fileName,
+            width: currentAttached.width,
+            height: currentAttached.height,
+            size_bytes: currentAttached.sizeBytes,
+          },
+        ]
+      : [];
+
     console.log(
-      `[ChatInput] Sending message: "${trimmed}" (provider=${provider}, model=${model}, tools_enabled=${toolsEnabled}, tz=${clientTimezone})`
+      `[ChatInput] Sending message: "${messageText}" (attachments=${attachments.length}, provider=${provider}, model=${model}, tools_enabled=${toolsEnabled}, tz=${clientTimezone})`
     );
 
     // Immediately start speech turn to keep the stop icon active throughout thinking, streaming, and audio
@@ -201,7 +339,9 @@ export default function ChatInput() {
 
     avatarSocket.send({
       type: "chat_message",
-      text: trimmed,
+      text: messageText,
+      attachments,
+      image: messageImage, // backward compatibility
       provider,
       model,
       tools_enabled: toolsEnabled,
@@ -210,6 +350,8 @@ export default function ChatInput() {
 
     el.value = "";
     el.style.height = "auto";
+    setAttachedImage(null);
+    attachedImageRef.current = null;
     setIsResponding(true);
     isRespondingRef.current = true;
     setCanSend(false);
@@ -228,7 +370,7 @@ export default function ChatInput() {
     setIsResponding(false);
     isRespondingRef.current = false;
 
-    const has = (textareaRef.current?.value.trim().length ?? 0) > 0;
+    const has = (textareaRef.current?.value.trim().length ?? 0) > 0 || attachedImageRef.current !== null;
     setCanSend(has);
     if (sendBtnRef.current) {
       sendBtnRef.current.disabled = !has;
@@ -236,13 +378,12 @@ export default function ChatInput() {
     textareaRef.current?.focus();
   }, []);
 
-
   // ─── Input handler ──────────────────────────────────────────────────────
   const handleInput = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
 
-    const has = el.value.trim().length > 0;
+    const has = el.value.trim().length > 0 || attachedImageRef.current !== null;
 
     // Never modify button disabled state while AI response is active
     if (!isRespondingRef.current) {
@@ -378,24 +519,90 @@ export default function ChatInput() {
           </span>
         </div>
       )}
-      <div className="chat-input-bar">
-
-        {/* Textarea — always visible with consistent placeholder, live fills text */}
-        <textarea
-          ref={textareaRef}
-          className="chat-input-field"
-          placeholder="Say something to Akari…"
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
-          onKeyUp={handleKeyUp}
-          rows={1}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
+      <div
+        className={`chat-input-bar ${isDragging ? "dragging" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Hidden native file input for camera/image selection */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          style={{ display: "none" }}
+          onChange={handleFileInputChange}
         />
 
-        {/* Actions: Mic → Send */}
+        {/* Left Action: Camera / Image attachment */}
+        <button
+          type="button"
+          className={`chat-btn chat-btn-camera ${attachedImage ? "active" : ""}`}
+          onClick={triggerFileInput}
+          disabled={isResponding || isCompressing}
+          title={
+            isCompressing
+              ? "Compressing image..."
+              : attachedImage
+              ? "Image attached (click to change)"
+              : "Attach image (or drag & drop / paste)"
+          }
+          aria-label="Attach image"
+        >
+          {isCompressing ? (
+            <IconLoader2 size={18} className="chat-btn-spin" />
+          ) : (
+            <IconCamera size={19} stroke={1.6} />
+          )}
+        </button>
+
+        {/* Center / Main Column: Attached preview chip + Textarea */}
+        <div className="chat-input-main-column">
+          {attachedImage && (
+            <div className="chat-image-preview-chip">
+              <div className="chat-image-thumb-wrapper">
+                <img
+                  src={attachedImage.dataUri}
+                  alt="Attached preview"
+                  className="chat-image-thumb"
+                />
+                <button
+                  type="button"
+                  className="chat-image-remove-btn"
+                  onClick={handleRemoveImage}
+                  title="Remove image"
+                  aria-label="Remove image"
+                >
+                  <IconX size={12} stroke={2.5} />
+                </button>
+              </div>
+              <div className="chat-image-meta">
+                <span className="chat-image-name">{attachedImage.fileName || "Image"}</span>
+                <span className="chat-image-size">
+                  {Math.round(attachedImage.sizeBytes / 1024)} KB · {attachedImage.width}×{attachedImage.height}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Textarea — always visible with dynamic placeholder */}
+          <textarea
+            ref={textareaRef}
+            className="chat-input-field"
+            placeholder={attachedImage ? "Ask Akari about this image…" : "Say something to Akari…"}
+            onInput={handleInput}
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
+            onPaste={handlePaste}
+            rows={1}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+        </div>
+
+        {/* Right Actions: Mic → Send */}
         <div className="chat-input-actions">
           <button
             type="button"

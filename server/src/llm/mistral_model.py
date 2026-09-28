@@ -12,13 +12,25 @@ model = "ministral-8b-latest"
 client = Mistral(api_key=mistral_api_key)
 
 
-def classic_chat(prompt: str, history: list, model_name: str | None = None) -> str:
+def classic_chat(
+    prompt: str, history: list, model_name: str | None = None, image: str | None = None
+) -> str:
     active_model = model_name or model
-    print(f"[Mistral] classic_chat using model: '{active_model}'")
+    print(f"[Mistral] classic_chat using model: '{active_model}' (has_image={bool(image)})")
+    if image:
+        user_msg = UserMessage(
+            content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image}},
+            ]
+        )
+    else:
+        user_msg = UserMessage(content=prompt)
+
     messages = (
         [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
         + _normalize_history_for_mistral(history)
-        + [UserMessage(content=prompt)]
+        + [user_msg]
     )
     try:
         chat_response = client.chat.complete(
@@ -64,6 +76,7 @@ def stream_chat(
     prompt: str,
     history: list,
     model_name: str | None = None,
+    image: str | None = None,
     tools_enabled: bool = False,
     max_tool_rounds: int = 5,
     on_tool_activity: Callable[[str, str], None] | None = None,
@@ -72,13 +85,23 @@ def stream_chat(
     """Yields text deltas as Mistral generates them, with optional multi-round tool calling."""
     active_model = model_name or model
     print(
-        f"[Mistral] stream_chat starting with model: '{active_model}' (tools_enabled={tools_enabled})"
+        f"[Mistral] stream_chat starting with model: '{active_model}' (tools_enabled={tools_enabled}, has_image={bool(image)})"
     )
     normalized_history = _normalize_history_for_mistral(history)
+    if image:
+        user_msg = UserMessage(
+            content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image}},
+            ]
+        )
+    else:
+        user_msg = UserMessage(content=prompt)
+
     messages = (
         [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
         + normalized_history
-        + [UserMessage(content=prompt)]
+        + [user_msg]
     )
 
     if not tools_enabled:

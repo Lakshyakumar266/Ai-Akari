@@ -27,8 +27,8 @@ Integration of OpenRouter as an inference provider for the Akari Watanabe AI ass
       api_key=os.getenv("OPENROUTER_APIKEY"),
       timeout=45.0,
       default_headers={
-          "HTTP-Referer": "https://github.com/Lakshyakumar266/AkariWatanabe-companion",
-          "X-Title": "Akari Watanabe Companion",
+          "HTTP-Referer": "https://github.com/Lakshyakumar266/",
+          "X-Title": "Akari Watanabe",
       },
   )
   ```

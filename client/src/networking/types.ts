@@ -78,6 +78,7 @@ export interface LlmModelOption {
   id: string;
   name: string;
   tool_calling_supported?: boolean;
+  vision_supported?: boolean;
 }
 
 export interface LlmProviderOption {
@@ -86,6 +87,7 @@ export interface LlmProviderOption {
   description: string;
   default_model: string;
   tool_calling_supported?: boolean;
+  vision_supported?: boolean;
   models: LlmModelOption[];
 }
 
@@ -104,6 +106,7 @@ export interface ConfigEvent {
   available_llm_providers?: LlmProviderOption[];
   tool_calling_enabled?: boolean;
   tool_calling_supported?: boolean;
+  vision_supported?: boolean;
   max_tool_calls?: number;
   available_tools?: AvailableToolInfo[];
 }
@@ -126,6 +129,27 @@ export interface ToolStartEvent {
 export interface ToolEndEvent {
   type: "tool_end";
   tool: string;
+}
+
+export interface ChatAttachment {
+  type: "image";
+  mime_type: string;
+  data: string; // base64 Data URI
+  name?: string;
+  width?: number;
+  height?: number;
+  size_bytes?: number;
+}
+
+export interface ChatMessagePayload {
+  type: "chat_message";
+  text: string;
+  attachments?: ChatAttachment[];
+  image?: string; // backward compatibility
+  provider?: string;
+  model?: string;
+  tools_enabled?: boolean;
+  timezone?: string;
 }
 
 export type AvatarEvent =

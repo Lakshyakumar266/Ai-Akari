@@ -4,6 +4,7 @@ from .provider import (
     get_provider_info,
     set_active_provider,
     is_tool_calling_supported,
+    is_vision_supported,
     AVAILABLE_PROVIDERS,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "get_provider_info",
     "set_active_provider",
     "is_tool_calling_supported",
+    "is_vision_supported",
     "AVAILABLE_PROVIDERS",
 ]

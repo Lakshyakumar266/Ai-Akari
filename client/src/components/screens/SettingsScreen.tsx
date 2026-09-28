@@ -33,6 +33,7 @@ interface ModelDetail {
   badge?: string;
   context: string;
   toolCallingSupported: boolean;
+  visionSupported?: boolean;
 }
 
 interface ProviderDetail {
@@ -40,6 +41,7 @@ interface ProviderDetail {
   name: string;
   badge: string;
   toolCallingSupported: boolean;
+  visionSupported?: boolean;
   models: ModelDetail[];
 }
 
@@ -49,6 +51,7 @@ const PROVIDERS: ProviderDetail[] = [
     name: "Mistral AI",
     badge: "Official API",
     toolCallingSupported: true,
+    visionSupported: true,
     models: [
       {
         id: "ministral-8b-latest",
@@ -56,6 +59,15 @@ const PROVIDERS: ProviderDetail[] = [
         badge: "Recommended",
         context: "128k context",
         toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "pixtral-12b-2409",
+        name: "Pixtral 12B",
+        badge: "Vision",
+        context: "128k context",
+        toolCallingSupported: false,
+        visionSupported: true,
       },
       {
         id: "mistral-small-latest",
@@ -63,6 +75,7 @@ const PROVIDERS: ProviderDetail[] = [
         badge: "Reasoning",
         context: "32k context",
         toolCallingSupported: true,
+        visionSupported: false,
       },
       {
         id: "open-mistral-7b",
@@ -70,6 +83,7 @@ const PROVIDERS: ProviderDetail[] = [
         badge: "Baseline",
         context: "32k context",
         toolCallingSupported: true,
+        visionSupported: false,
       },
     ],
   },
@@ -78,6 +92,7 @@ const PROVIDERS: ProviderDetail[] = [
     name: "Free.ai",
     badge: "Free Gateway",
     toolCallingSupported: true,
+    visionSupported: false,
     models: [
       {
         id: "qwen7b",
@@ -85,6 +100,7 @@ const PROVIDERS: ProviderDetail[] = [
         badge: "Recommended",
         context: "32k context",
         toolCallingSupported: true,
+        visionSupported: false,
       },
       {
         id: "qwen3-8b",
@@ -92,6 +108,7 @@ const PROVIDERS: ProviderDetail[] = [
         badge: "Next-Gen",
         context: "32k context",
         toolCallingSupported: true,
+        visionSupported: false,
       },
     ],
   },
@@ -100,6 +117,7 @@ const PROVIDERS: ProviderDetail[] = [
     name: "OpenRouter (Free)",
     badge: "Free Tier",
     toolCallingSupported: true,
+    visionSupported: true,
     models: [
       {
         id: "openrouter/free",
@@ -107,6 +125,7 @@ const PROVIDERS: ProviderDetail[] = [
         badge: "Auto (Recommended)",
         context: "200k context",
         toolCallingSupported: true,
+        visionSupported: true,
       },
       {
         id: "inclusionai/ling-3.0-flash-sante:free",
@@ -345,6 +364,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       ) : (
                         <span className="row-tool-badge unsupported" title="Tool Calling Not Supported">
                           No Tools
+                        </span>
+                      )}
+                      {m.visionSupported && (
+                        <span
+                          className="row-tool-badge supported"
+                          style={{
+                            borderColor: "rgba(168, 85, 247, 0.4)",
+                            color: "#c084fc",
+                            background: "rgba(168, 85, 247, 0.12)",
+                          }}
+                          title="Natively Supports Multimodal Vision"
+                        >
+                          Vision
                         </span>
                       )}
                     </div>

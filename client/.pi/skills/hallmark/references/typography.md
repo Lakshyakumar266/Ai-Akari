@@ -102,7 +102,7 @@ Three sources, in priority order:
 
 | Family | Source | Voice | Best for |
 | --- | --- | --- | --- |
-| **Geist Mono** | Google | Geist's mono companion | Default Hallmark mono, code, captions |
+| **Geist Mono** | Google | Geist's mono | Default Hallmark mono, code, captions |
 | **JetBrains Mono** | Google | Engineering mono, ligatures | Code, terminal, technical |
 | **IBM Plex Mono** | Google | Engineering mono, broad family | Technical body-grade |
 | **Commit Mono** | Google | Tighter mono, modern | Code, modern terminal |

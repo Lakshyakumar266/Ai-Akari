@@ -42,14 +42,14 @@ def get_client() -> OpenAI:
         api_key=key or "none",
         timeout=45.0,
         default_headers={
-            "HTTP-Referer": "https://github.com/Lakshyakumar266/AkariWatanabe-companion",
-            "X-Title": "Akari Watanabe Companion",
+            "HTTP-Referer": "https://github.com/Lakshyakumar266/",
+            "X-Title": "Akari Watanabe",
         },
     )
 
 
-def _format_messages(prompt: str, history: list) -> list[dict]:
-    """Converts mixed history items (Mistral UserMessage/AssistantMessage or dicts) into standard OpenAI format."""
+def _format_messages(prompt: str, history: list, image: str | None = None) -> list[dict]:
+    """Converts mixed history items into standard OpenAI format with optional multimodal image support."""
     messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
 
     for item in history:
@@ -63,13 +63,24 @@ def _format_messages(prompt: str, history: list) -> list[dict]:
             role = "assistant" if "assistant" in class_name else "user"
             messages.append({"role": role, "content": item.content or ""})
 
-    messages.append({"role": "user", "content": prompt})
+    if image:
+        messages.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image}},
+            ],
+        })
+    else:
+        messages.append({"role": "user", "content": prompt})
     return messages
 
 
-def classic_chat(prompt: str, history: list, model: str = DEFAULT_MODEL) -> str:
+def classic_chat(
+    prompt: str, history: list, model: str = DEFAULT_MODEL, image: str | None = None
+) -> str:
     """Non-streaming chat completion using OpenRouter API."""
-    messages = _format_messages(prompt, history)
+    messages = _format_messages(prompt, history, image=image)
     chosen_model = model or DEFAULT_MODEL
     client = get_client()
 
@@ -89,16 +100,17 @@ def stream_chat(
     prompt: str,
     history: list,
     model: str = DEFAULT_MODEL,
+    image: str | None = None,
     tools_enabled: bool = False,
     max_tool_rounds: int = 5,
     on_tool_activity: Callable[[str, str], None] | None = None,
     cancel_event: threading.Event | None = None,
 ) -> Generator[str, None, None]:
     """Yields text tokens as OpenRouter generates them in real-time, with multi-round tool calling support."""
-    messages = _format_messages(prompt, history)
+    messages = _format_messages(prompt, history, image=image)
     chosen_model = model or DEFAULT_MODEL
     print(
-        f"[OpenRouter] stream_chat starting with model: '{chosen_model}' (tools_enabled={tools_enabled})"
+        f"[OpenRouter] stream_chat starting with model: '{chosen_model}' (tools_enabled={tools_enabled}, has_image={bool(image)})"
     )
 
     client = get_client()

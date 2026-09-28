@@ -27,7 +27,7 @@ def get_client() -> OpenAI:
     return OpenAI(base_url=base_url, api_key=key or "none", timeout=45.0)
 
 
-FREEAI_TOOL_SYSTEM_PROMPT = """You are Akari Watanabe, an anime tsundere companion. Stay fully in character.
+FREEAI_TOOL_SYSTEM_PROMPT = """You are Akari Watanabe, an anime tsundere. Stay fully in character.
 
 CRITICAL TOOL CALLING RULES:
 - You have real-time access to external tools/functions.

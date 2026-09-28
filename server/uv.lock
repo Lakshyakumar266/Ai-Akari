@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "akariwatanabe-companion"
+name = "Ai-Akari"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
