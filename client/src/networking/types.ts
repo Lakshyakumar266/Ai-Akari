@@ -109,6 +109,13 @@ export interface ConfigEvent {
   vision_supported?: boolean;
   max_tool_calls?: number;
   available_tools?: AvailableToolInfo[];
+  api_keys_configured?: Record<string, boolean>;
+}
+
+export interface SetApiKeyPayload {
+  type: "set_api_key";
+  provider: string;
+  api_key: string;
 }
 
 export interface TranscriptionEvent {

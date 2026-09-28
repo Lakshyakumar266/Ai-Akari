@@ -15,8 +15,11 @@ import {
   IconArrowsExchange,
   IconWorld,
   IconCalendarTime,
+  IconKey,
+  IconEye,
+  IconEyeOff,
 } from "@tabler/icons-react";
-import { avatarEvents } from "../../networking";
+import { avatarEvents, avatarSocket } from "../../networking";
 import "./SettingsScreen.css";
 
 interface SettingsScreenProps {
@@ -37,7 +40,7 @@ interface ModelDetail {
 }
 
 interface ProviderDetail {
-  id: "mistral" | "freeai" | "openrouter";
+  id: "mistral" | "openai" | "freeai" | "openrouter";
   name: string;
   badge: string;
   toolCallingSupported: boolean;
@@ -46,6 +49,47 @@ interface ProviderDetail {
 }
 
 const PROVIDERS: ProviderDetail[] = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    badge: "GPT Frontier",
+    toolCallingSupported: true,
+    visionSupported: true,
+    models: [
+      {
+        id: "gpt-4o-mini",
+        name: "GPT-4o Mini",
+        badge: "Recommended",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
+      {
+        id: "gpt-4o",
+        name: "GPT-4o",
+        badge: "Flagship",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
+      {
+        id: "gpt-4-turbo",
+        name: "GPT-4 Turbo",
+        badge: "Frontier",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
+      {
+        id: "gpt-3.5-turbo",
+        name: "GPT-3.5 Turbo",
+        badge: "Legacy",
+        context: "16k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+    ],
+  },
   {
     id: "mistral",
     name: "Mistral AI",
@@ -177,6 +221,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [model, setModel] = useState<string>(currentModel || "ministral-8b-latest");
   const [toolsEnabled, setToolsEnabled] = useState<boolean>(currentToolsEnabled);
   const [isCopied, setIsCopied] = useState(false);
+  const [openAiKey, setOpenAiKey] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_openai_api_key") || "";
+    }
+    return "";
+  });
+  const [showKey, setShowKey] = useState<boolean>(false);
+  const [isKeySaved, setIsKeySaved] = useState<boolean>(false);
+  const [serverKeysConfigured, setServerKeysConfigured] = useState<Record<string, boolean>>({});
 
   // Sync state if props change from outside (e.g. browser back/forward)
   useEffect(() => {
@@ -209,6 +262,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (typeof event.tool_calling_enabled === "boolean") {
         setToolsEnabled(event.tool_calling_enabled);
       }
+      if (event.api_keys_configured) {
+        setServerKeysConfigured(event.api_keys_configured);
+      }
     });
     return unsubscribe;
   }, []);
@@ -221,8 +277,31 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     activeProviderDetail.models[0];
 
   const isCurrentModelToolSupported = activeModelDetail?.toolCallingSupported ?? false;
+  const isOpenAiConfigured = Boolean(openAiKey.trim() || serverKeysConfigured["openai"]);
 
-  const handleSelectProvider = (newProviderId: "mistral" | "freeai" | "openrouter") => {
+  const handleSaveApiKey = () => {
+    const trimmed = openAiKey.trim();
+    if (typeof window !== "undefined") {
+      if (trimmed) {
+        localStorage.setItem("akari_openai_api_key", trimmed);
+      } else {
+        localStorage.removeItem("akari_openai_api_key");
+      }
+    }
+    avatarSocket.setApiKey("openai", trimmed);
+    setIsKeySaved(true);
+    setTimeout(() => setIsKeySaved(false), 2500);
+  };
+
+  const handleClearApiKey = () => {
+    setOpenAiKey("");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("akari_openai_api_key");
+    }
+    avatarSocket.setApiKey("openai", "");
+  };
+
+  const handleSelectProvider = (newProviderId: "mistral" | "openai" | "freeai" | "openrouter") => {
     if (newProviderId === provider) return;
     const targetProviderObj = PROVIDERS.find((p) => p.id === newProviderId)!;
     const defaultModelObj = targetProviderObj.models[0];
@@ -260,12 +339,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const currentUrlPreview =
     typeof window !== "undefined"
-      ? `${window.location.origin}/?screen=settings&character=akari&provider=${provider}&model=${model}&tools=${
-          toolsEnabled && isCurrentModelToolSupported ? "true" : "false"
-        }`
-      : `/?screen=settings&character=akari&provider=${provider}&model=${model}&tools=${
-          toolsEnabled && isCurrentModelToolSupported ? "true" : "false"
-        }`;
+      ? `${window.location.origin}/?screen=settings&character=akari&model=${model}`
+      : `/?screen=settings&character=akari&model=${model}`;
 
   const copyUrl = () => {
     if (navigator?.clipboard) {
@@ -315,6 +390,83 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             })}
           </div>
         </section>
+
+        {/* ─── OpenAI API Key Configuration (When OpenAI is selected) ─── */}
+        {provider === "openai" && (
+          <section className="settings-section api-key-section" aria-labelledby="apikey-heading">
+            <div className="section-label-row">
+              <IconKey size={16} className="section-icon" />
+              <span id="apikey-heading" className="section-label">
+                OpenAI API Key
+              </span>
+              <span className={`api-key-status-pill ${isOpenAiConfigured ? "configured" : "required"}`}>
+                <span className="status-dot" />
+                {isOpenAiConfigured ? "Key Active" : "Key Required"}
+              </span>
+            </div>
+
+            <div className="api-key-card">
+              <p className="api-key-instructions">
+                Enter your official OpenAI API key (<span className="code-hint">sk-...</span>) to use GPT-4o, GPT-4o Mini, tool calling, and multimodal vision.
+              </p>
+
+              <div className="api-key-input-wrapper">
+                <input
+                  type={showKey ? "text" : "password"}
+                  className="api-key-input"
+                  placeholder="sk-proj-... or sk-..."
+                  value={openAiKey}
+                  onChange={(e) => setOpenAiKey(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveApiKey()}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="api-key-toggle-btn"
+                  onClick={() => setShowKey(!showKey)}
+                  title={showKey ? "Hide API Key" : "Show API Key"}
+                  aria-label={showKey ? "Hide API Key" : "Show API Key"}
+                >
+                  {showKey ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                </button>
+              </div>
+
+              <div className="api-key-actions-row">
+                <button
+                  type="button"
+                  className={`api-key-save-btn ${isKeySaved ? "saved" : ""}`}
+                  onClick={handleSaveApiKey}
+                >
+                  {isKeySaved ? (
+                    <>
+                      <IconCheck size={14} stroke={3} />
+                      <span>Saved & Synced</span>
+                    </>
+                  ) : (
+                    <span>Save & Use Key</span>
+                  )}
+                </button>
+                {openAiKey && (
+                  <button
+                    type="button"
+                    className="api-key-clear-btn"
+                    onClick={handleClearApiKey}
+                  >
+                    Clear Key
+                  </button>
+                )}
+              </div>
+
+              <div className="api-key-security-note">
+                <IconAlertCircle size={13} className="note-icon" />
+                <span>
+                  Keys are stored locally in your browser and synced directly to your running backend session.
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* ─── Compact Model List ────────────────────────────────────── */}
         <section className="settings-section" aria-labelledby="model-heading">
@@ -675,9 +827,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <div className="sync-bar-left">
               <span className="sync-live-dot" />
               <code className="sync-url-text">
-                ?screen=settings&provider={provider}&model={model}&tools={
-                  toolsEnabled && isCurrentModelToolSupported ? "true" : "false"
-                }
+                {`?screen=settings&character=akari&model=${model}`}
               </code>
             </div>
 

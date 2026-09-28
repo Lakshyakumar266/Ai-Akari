@@ -62,7 +62,34 @@ def analyze_image(image_data_uri: str) -> str:
         except Exception as err:
             print(f"[Vision] Mistral vision extraction error: {err}")
 
-    # Priority 2: OpenRouter Free Models Router if OPENROUTER_APIKEY is available
+    # Priority 2: OpenAI GPT-4o Mini if OPENAI_API_KEY is available
+    try:
+        from . import openai_model
+        if openai_model.has_api_key():
+            client = openai_model.get_client()
+            print("[Vision] Extracting image analysis via OpenAI 'gpt-4o-mini'...")
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": VISION_PROMPT},
+                            {"type": "image_url", "image_url": {"url": image_data_uri}},
+                        ],
+                    }
+                ],
+                temperature=0.2,
+                max_tokens=1000,
+            )
+            content = resp.choices[0].message.content or ""
+            if content.strip():
+                print(f"\n[Vision] Extracted Image Context (OpenAI GPT-4o Mini):\n{'-'*60}\n{content.strip()}\n{'-'*60}\n")
+                return content.strip()
+    except Exception as err:
+        print(f"[Vision] OpenAI vision extraction error: {err}")
+
+    # Priority 3: OpenRouter Free Models Router if OPENROUTER_APIKEY is available
     openrouter_key = os.getenv("OPENROUTER_APIKEY") or os.getenv("OPENROUTER_API_KEY")
     if openrouter_key:
         try:

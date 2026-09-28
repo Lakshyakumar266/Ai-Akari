@@ -9,10 +9,39 @@ const DEFAULT_PROVIDER = "mistral";
 const DEFAULT_MODEL = "ministral-8b-latest";
 const DEFAULT_TOOLS = true;
 
-function getDefaultModelForProvider(provider: string): string {
+export function getDefaultModelForProvider(provider: string): string {
+  if (provider === "openai") return "gpt-4o-mini";
   if (provider === "freeai") return "qwen7b";
   if (provider === "openrouter") return "openrouter/free";
   return "ministral-8b-latest";
+}
+
+export function getProviderForModel(model: string, fallbackProvider?: string): string {
+  if (!model) return fallbackProvider || DEFAULT_PROVIDER;
+  const lower = model.toLowerCase();
+  if (
+    lower.startsWith("gpt-") ||
+    lower.startsWith("o1") ||
+    lower.startsWith("o3") ||
+    lower.startsWith("chatgpt")
+  ) {
+    return "openai";
+  }
+  if (lower.includes("/") || lower.startsWith("openrouter")) {
+    return "openrouter";
+  }
+  if (lower === "qwen7b" || lower.startsWith("freeai")) {
+    return "freeai";
+  }
+  if (
+    lower.startsWith("ministral") ||
+    lower.startsWith("mistral") ||
+    lower.startsWith("pixtral") ||
+    lower.startsWith("open-mistral")
+  ) {
+    return "mistral";
+  }
+  return fallbackProvider || DEFAULT_PROVIDER;
 }
 
 function parseLocation(): NavigationState {
@@ -29,9 +58,7 @@ function parseLocation(): NavigationState {
   const params = new URLSearchParams(window.location.search);
   const rawScreen = params.get("screen")?.toLowerCase();
   const rawCharacter = params.get("character")?.toLowerCase();
-  const rawProvider = params.get("provider")?.toLowerCase();
   const rawModel = params.get("model");
-  const rawTools = params.get("tools");
 
   const screen: ScreenType = VALID_SCREENS.includes(rawScreen as ScreenType)
     ? (rawScreen as ScreenType)
@@ -41,18 +68,28 @@ function parseLocation(): NavigationState {
     ? rawCharacter.trim()
     : DEFAULT_CHARACTER;
 
-  const provider = rawProvider && (rawProvider === "freeai" || rawProvider === "mistral" || rawProvider === "openrouter")
-    ? rawProvider
-    : (localStorage.getItem("akari_llm_provider") || DEFAULT_PROVIDER);
-
-  const model = rawModel && rawModel.trim().length > 0
-    ? rawModel.trim()
-    : (localStorage.getItem("akari_llm_model") || getDefaultModelForProvider(provider));
-
+  // Tool calling setting is strictly stored in localStorage (no tools in URL)
   const storedTools = localStorage.getItem("akari_tool_calling_enabled");
-  const tools = rawTools !== null
-    ? rawTools === "true"
-    : (storedTools !== null ? storedTools === "true" : DEFAULT_TOOLS);
+  const tools = storedTools !== null ? storedTools === "true" : DEFAULT_TOOLS;
+
+  // Stored preferences
+  const storedProvider = localStorage.getItem("akari_llm_provider");
+  const storedModel = localStorage.getItem("akari_llm_model");
+
+  let model: string;
+  let provider: string;
+
+  if (rawModel && rawModel.trim().length > 0) {
+    model = rawModel.trim();
+    // Infer provider from the explicit model in the URL, falling back to stored provider
+    provider = getProviderForModel(model, storedProvider || undefined);
+  } else if (storedModel && storedModel.trim().length > 0) {
+    model = storedModel.trim();
+    provider = storedProvider || getProviderForModel(model);
+  } else {
+    provider = storedProvider || DEFAULT_PROVIDER;
+    model = getDefaultModelForProvider(provider);
+  }
 
   return { screen, character, provider, model, tools };
 }
@@ -60,16 +97,12 @@ function parseLocation(): NavigationState {
 function buildUrl(
   screen: ScreenType,
   character: string,
-  provider: string,
-  model: string,
-  tools: boolean
+  model: string
 ): string {
   const params = new URLSearchParams();
   params.set("screen", screen);
   params.set("character", character);
-  params.set("provider", provider);
   params.set("model", model);
-  params.set("tools", tools ? "true" : "false");
   return `/?${params.toString()}`;
 }
 
@@ -82,24 +115,23 @@ export function useNavigation() {
     const params = new URLSearchParams(window.location.search);
     const hasScreen = params.has("screen");
     const hasChar = params.has("character");
-    const hasProvider = params.has("provider");
     const hasModel = params.has("model");
-    const hasTools = params.has("tools");
+    const hasLegacyProvider = params.has("provider");
+    const hasLegacyTools = params.has("tools");
 
+    // Enforce clean URL: only screen, character, and model in query parameters
     if (
       !hasScreen ||
       !hasChar ||
-      !hasProvider ||
       !hasModel ||
-      !hasTools ||
+      hasLegacyProvider ||
+      hasLegacyTools ||
       !VALID_SCREENS.includes(params.get("screen") as ScreenType)
     ) {
       const canonical = buildUrl(
         current.screen,
         current.character,
-        current.provider,
-        current.model,
-        current.tools
+        current.model
       );
       window.history.replaceState(null, "", canonical);
     }
@@ -131,10 +163,23 @@ export function useNavigation() {
     targetTools?: boolean
   ) => {
     const char = targetCharacter || navState.character || DEFAULT_CHARACTER;
-    const prov = targetProvider || navState.provider || DEFAULT_PROVIDER;
+    const prov =
+      targetProvider ||
+      (targetModel ? getProviderForModel(targetModel, navState.provider) : navState.provider) ||
+      DEFAULT_PROVIDER;
     const mod = targetModel || navState.model || getDefaultModelForProvider(prov);
     const tls = targetTools !== undefined ? targetTools : navState.tools;
-    const url = buildUrl(targetScreen, char, prov, mod, tls);
+    const url = buildUrl(targetScreen, char, mod);
+
+    if (targetProvider) {
+      localStorage.setItem("akari_llm_provider", prov);
+    }
+    if (targetModel) {
+      localStorage.setItem("akari_llm_model", mod);
+    }
+    if (targetTools !== undefined) {
+      localStorage.setItem("akari_tool_calling_enabled", tls ? "true" : "false");
+    }
 
     window.history.pushState(null, "", url);
     setNavState({ screen: targetScreen, character: char, provider: prov, model: mod, tools: tls });
@@ -143,29 +188,21 @@ export function useNavigation() {
   const updateLlm = useCallback((newProvider: string, newModel?: string) => {
     const prov = newProvider;
     const mod = newModel || getDefaultModelForProvider(prov);
-    const tls = navState.tools;
-    const url = buildUrl(navState.screen, navState.character, prov, mod, tls);
+    const url = buildUrl(navState.screen, navState.character, mod);
 
     localStorage.setItem("akari_llm_provider", prov);
     localStorage.setItem("akari_llm_model", mod);
     window.history.replaceState(null, "", url);
     setNavState(prev => ({ ...prev, provider: prov, model: mod }));
     avatarSocket.setLlmProvider(prov, mod);
-  }, [navState.screen, navState.character, navState.tools]);
+  }, [navState.screen, navState.character]);
 
   const updateToolCalling = useCallback((enabled: boolean) => {
-    const url = buildUrl(
-      navState.screen,
-      navState.character,
-      navState.provider,
-      navState.model,
-      enabled
-    );
+    // Tool calling is saved exclusively in localStorage and not shown in the URL
     localStorage.setItem("akari_tool_calling_enabled", enabled ? "true" : "false");
-    window.history.replaceState(null, "", url);
     setNavState(prev => ({ ...prev, tools: enabled }));
     avatarSocket.setToolCalling(enabled);
-  }, [navState.screen, navState.character, navState.provider, navState.model]);
+  }, []);
 
   return {
     screen: navState.screen,
