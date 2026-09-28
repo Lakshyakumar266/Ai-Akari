@@ -1,13 +1,13 @@
 # Tool Calling Architecture, Model Capability Matrix & Streaming Integration Specification
 **Date**: September 26, 2026  
-**Repository**: `Lakshyakumar266/anime-wifu-companion` (`AkariWattnabe-companion`)  
+**Repository**: `Lakshyakumar266/Ai-Akari-Watanabe` (`AiAkari`)  
 **Feature**: Tool Calling / Function Calling Capability Subsystem  
     
 ---
 
 ## 1. Overview & Objective
 
-This specification formalizes the architecture, discovery patterns, provider compatibility matrix, execution mechanics, and user interface controls implemented for the **Tool Calling** (Function Calling) feature in Akari Watanabe companion.
+This specification formalizes the architecture, discovery patterns, provider compatibility matrix, execution mechanics, and user interface controls implemented for the **Tool Calling** (Function Calling) feature in Akari Watanabe .
 
 Reference Codebase Links:
 - `./server/src/tools/base.py`
@@ -163,7 +163,7 @@ All tools are strictly allowlisted and execute in an asynchronous, non-blocking 
 ### 4.8 Tool 8: `get_system_status`
 - **Identifier**: `get_system_status`
 - **Display Name**: System Status
-- **Description**: Returns host OS environment, Python runtime version, active AI model, detected client timezone, and companion health metrics.
+- **Description**: Returns host OS environment, Python runtime version, active AI model, detected client timezone, and health metrics.
 - **Parameters**: `{ "type": "object", "properties": {}, "required": [] }`
 
 ---

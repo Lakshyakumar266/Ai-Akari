@@ -774,7 +774,7 @@ def get_system_status() -> dict[str, Any]:
     provider_info = get_provider_info()
     return {
         "status": "online",
-        "companion": "Akari Watanabe AI Assistant",
+        "model": "Akari Watanabe AI Assistant",
         "os": f"{platform.system()} {platform.release()} ({platform.machine()})",
         "python_version": sys.version.split()[0],
         "active_llm_provider": provider_info.get("active_provider", "unknown"),

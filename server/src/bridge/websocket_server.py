@@ -10,7 +10,13 @@ from .broadcaster import broadcaster
 from .protocol import BinaryPacket
 from src.asr.server_asr import unload_asr_model
 from src.asr.chat_whisper import unload_stream_model
-from src.llm import get_provider_info, set_active_provider, is_tool_calling_supported
+from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
+from src.llm import (
+    get_provider_info,
+    set_active_provider,
+    is_tool_calling_supported,
+    is_vision_supported,
+)
 from src.config import TOOL_CALLING_ENABLED, MAX_TOOL_CALL_ROUNDS
 from src.tools import tool_registry
 
@@ -29,6 +35,7 @@ def _build_config_dict() -> dict:
     active_prov = provider_info["active_provider"]
     active_mod = provider_info["active_model"]
     supported = is_tool_calling_supported(active_prov, active_mod)
+    vision_supported = is_vision_supported(active_prov, active_mod)
     return {
         "type": "config",
         "chat_input_enabled": _chat_input_enabled,
@@ -37,6 +44,7 @@ def _build_config_dict() -> dict:
         "available_llm_providers": provider_info["providers"],
         "tool_calling_enabled": _tool_calling_enabled and supported,
         "tool_calling_supported": supported,
+        "vision_supported": vision_supported,
         "max_tool_calls": _max_tool_calls,
         "available_tools": tool_registry.get_tools_summary(),
     }
@@ -49,7 +57,6 @@ def get_chat_input_enabled() -> bool:
 
 async def set_chat_input_enabled(enabled: bool):
     global _chat_input_enabled
-    from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 
     if _chat_input_enabled == enabled and (not enabled and is_voice_loop_running()):
         return
@@ -214,11 +221,54 @@ async def _handle_voice_end(websocket: ServerConnection):
     await session.finalize()
 
 
+MAX_IMAGE_PAYLOAD_BYTES = 7 * 1024 * 1024  # 7MB max per image Data URI
+ALLOWED_IMAGE_PREFIXES = (
+    "data:image/jpeg;base64,",
+    "data:image/png;base64,",
+    "data:image/webp;base64,",
+    "data:image/gif;base64,",
+)
+
+
+def _validate_image_attachment(data_uri: str | None) -> str | None:
+    """Validates image payload size, format, and structure on the server."""
+    if not data_uri or not isinstance(data_uri, str):
+        return None
+
+    if len(data_uri) > MAX_IMAGE_PAYLOAD_BYTES:
+        print(f"[Bridge] Rejected oversized image: {len(data_uri)} bytes (limit={MAX_IMAGE_PAYLOAD_BYTES})")
+        return None
+
+    if not data_uri.startswith(ALLOWED_IMAGE_PREFIXES):
+        print("[Bridge] Rejected unsupported image MIME type.")
+        return None
+
+    return data_uri
+
+
 async def _handle_chat_message(data: dict):
-    """Process a chat_message from the UI."""
+    """Process a chat_message from the UI with optional image attachment and forward-compatible attachments array."""
     text = data.get("text", "").strip()
-    if not text:
+
+    # Extract image from attachments array or fallback image field
+    attachments = data.get("attachments") or []
+    raw_image = None
+    if isinstance(attachments, list) and len(attachments) > 0:
+        for att in attachments:
+            if isinstance(att, dict) and att.get("type") == "image":
+                raw_image = att.get("data")
+                break
+
+    if not raw_image:
+        raw_image = data.get("image")
+
+    image = _validate_image_attachment(raw_image)
+
+    if not text and not image:
         return
+
+    if not text and image:
+        text = "Look at this image. What do you think?"
 
     provider = data.get("provider")
     model = data.get("model")
@@ -245,6 +295,7 @@ async def _handle_chat_message(data: dict):
     task = asyncio.create_task(
         process_chat_message(
             text,
+            image=image,
             tools_enabled=tools_enabled,
             max_tool_rounds=_max_tool_calls,
         )
@@ -394,7 +445,10 @@ async def client_handler(websocket: ServerConnection):
 
         if broadcaster.client_count == 0:
             print("[Bridge] All clients disconnected. Halting voice loop and unloading models.")
-            await stop_voice_loop()
+            try:
+                await stop_voice_loop()
+            except Exception as loop_err:
+                print(f"[Bridge] Error halting voice loop: {loop_err}")
             unload_asr_model()
             unload_stream_model()
 

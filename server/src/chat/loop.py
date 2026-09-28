@@ -108,24 +108,27 @@ async def stop_chat_stream(emit_speech_end: bool = True):
 
 
 async def process_chat_message(
-    user_text: str, tools_enabled: bool = False, max_tool_rounds: int = 5
+    user_text: str,
+    image: str | None = None,
+    tools_enabled: bool = False,
+    max_tool_rounds: int = 5,
 ):
     """
     End-to-end pipeline for a user chat message:
       1. Dispatch transcript event (so client can show what the user said)
-      2. Stream LLM response (with optional tool execution)
+      2. Stream LLM response (with optional vision and tool execution)
       3. Generate TTS audio per dialogue unit
       4. Dispatch speech_segment events to client
     """
     global _history, _active_cancel_event
 
-    if not user_text.strip():
+    if not user_text.strip() and not image:
         return
 
     cancel_event = threading.Event()
     _active_cancel_event = cancel_event
 
-    print(f"[Chat] You: {user_text} (tools_enabled={tools_enabled})")
+    print(f"[Chat] You: {user_text} (has_image={bool(image)}, tools_enabled={tools_enabled})")
     await transcript(user_text)
     await thinking_start()
 
@@ -172,6 +175,7 @@ async def process_chat_message(
             for token in stream_chat(
                 user_text,
                 _history,
+                image=image,
                 tools_enabled=tools_enabled,
                 max_tool_rounds=max_tool_rounds,
                 on_tool_activity=on_tool_activity,
@@ -309,7 +313,17 @@ async def process_chat_message(
             raw_reply = "".join(full_reply)
             clean_reply = strip_all_emotion_tags(raw_reply).strip()
             if clean_reply:
-                _history.append(UserMessage(content=user_text))
+                if image:
+                    _history.append(
+                        UserMessage(
+                            content=[
+                                {"type": "text", "text": user_text},
+                                {"type": "image_url", "image_url": {"url": image}},
+                            ]
+                        )
+                    )
+                else:
+                    _history.append(UserMessage(content=user_text))
                 _history.append(AssistantMessage(content=clean_reply))
         else:
             if not llm_task.done():
