@@ -302,14 +302,35 @@ export default function ChatInput() {
     if (!trimmed && !currentAttached) return;
 
     const params = new URLSearchParams(window.location.search);
-    const provider = params.get("provider") || localStorage.getItem("akari_llm_provider") || "mistral";
-    const model = params.get("model") || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
-    const toolsParam = params.get("tools");
+    const urlModel = params.get("model");
+    const model = urlModel || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
+    let provider = localStorage.getItem("akari_llm_provider") || "mistral";
+
+    if (urlModel) {
+      const lower = urlModel.toLowerCase();
+      if (
+        lower.startsWith("gpt-") ||
+        lower.startsWith("o1") ||
+        lower.startsWith("o3") ||
+        lower.startsWith("chatgpt")
+      ) {
+        provider = "openai";
+      } else if (lower.includes("/") || lower.startsWith("openrouter")) {
+        provider = "openrouter";
+      } else if (lower === "qwen7b" || lower.startsWith("freeai")) {
+        provider = "freeai";
+      } else if (
+        lower.startsWith("ministral") ||
+        lower.startsWith("mistral") ||
+        lower.startsWith("pixtral") ||
+        lower.startsWith("open-mistral")
+      ) {
+        provider = "mistral";
+      }
+    }
+
     const toolsStored = localStorage.getItem("akari_tool_calling_enabled");
-    const toolsEnabled =
-      toolsParam !== null
-        ? toolsParam === "true"
-        : (toolsStored !== null ? toolsStored === "true" : true);
+    const toolsEnabled = toolsStored !== null ? toolsStored === "true" : true;
 
     const clientTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 

@@ -14,6 +14,8 @@ from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_runn
 from src.llm import (
     get_provider_info,
     set_active_provider,
+    set_provider_api_key,
+    has_provider_api_key,
     is_tool_calling_supported,
     is_vision_supported,
 )
@@ -47,6 +49,7 @@ def _build_config_dict() -> dict:
         "vision_supported": vision_supported,
         "max_tool_calls": _max_tool_calls,
         "available_tools": tool_registry.get_tools_summary(),
+        "api_keys_configured": provider_info.get("api_keys_configured", {}),
     }
 
 
@@ -375,6 +378,8 @@ async def client_handler(websocket: ServerConnection):
                 elif msg_type == "set_llm_provider":
                     provider_id = data.get("provider")
                     model_id = data.get("model")
+                    if data.get("api_key"):
+                        set_provider_api_key(provider_id, data["api_key"])
                     if provider_id:
                         set_active_provider(provider_id, model_id)
                         if _tool_calling_enabled and not is_tool_calling_supported(
@@ -384,6 +389,13 @@ async def client_handler(websocket: ServerConnection):
                                 f"[Bridge] Disabling tool calling because new model '{model_id}' is unsupported."
                             )
                             _tool_calling_enabled = False
+                        await broadcaster.broadcast(_build_config_dict())
+
+                elif msg_type == "set_api_key":
+                    provider_id = data.get("provider")
+                    api_key = data.get("api_key", "")
+                    if provider_id:
+                        set_provider_api_key(provider_id, api_key)
                         await broadcaster.broadcast(_build_config_dict())
 
                 elif msg_type == "set_tool_calling":

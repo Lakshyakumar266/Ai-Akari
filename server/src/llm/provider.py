@@ -17,6 +17,7 @@ from typing import Generator
 from dotenv import load_dotenv
 
 from . import mistral_model
+from . import openai_model
 from . import freeai_model
 from . import openrouter_model
 from .vision import analyze_image
@@ -25,6 +26,40 @@ load_dotenv()
 
 # Available provider definitions with explicit tool-calling and vision capability flags
 AVAILABLE_PROVIDERS = [
+    {
+        "id": "openai",
+        "name": "OpenAI",
+        "description": "Direct OpenAI API with GPT-4o, GPT-4o Mini, full tool calling and multimodal vision.",
+        "default_model": "gpt-4o-mini",
+        "tool_calling_supported": True,
+        "vision_supported": True,
+        "models": [
+            {
+                "id": "gpt-4o-mini",
+                "name": "GPT-4o Mini (Recommended)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "gpt-4o",
+                "name": "GPT-4o (Flagship)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "gpt-4-turbo",
+                "name": "GPT-4 Turbo",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "gpt-3.5-turbo",
+                "name": "GPT-3.5 Turbo",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+        ],
+    },
     {
         "id": "mistral",
         "name": "Mistral AI",
@@ -135,6 +170,8 @@ if (os.getenv("FREEAI_APIKEY") or os.getenv("FREEAI_API_KEY")) and not os.getenv
     _default_provider = "freeai"
 if (os.getenv("OPENROUTER_APIKEY") or os.getenv("OPENROUTER_API_KEY")) and not os.getenv("MISTRAL_API_KEY"):
     _default_provider = "openrouter"
+if (os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_APIKEY")) and not os.getenv("MISTRAL_API_KEY"):
+    _default_provider = "openai"
 
 _active_provider: str = os.getenv("DEFAULT_LLM_PROVIDER", _default_provider)
 
@@ -144,6 +181,33 @@ def _get_default_model_for_provider(provider: str) -> str:
     return matched["default_model"] if matched else "ministral-8b-latest"
 
 _active_model: str = _get_default_model_for_provider(_active_provider)
+
+
+def set_provider_api_key(provider_id: str, api_key: str):
+    """Updates the runtime API key for a given provider."""
+    cleaned = api_key.strip() if api_key else ""
+    if provider_id == "openai":
+        openai_model.set_api_key(cleaned)
+    elif provider_id == "mistral":
+        os.environ["MISTRAL_API_KEY"] = cleaned
+    elif provider_id == "openrouter":
+        os.environ["OPENROUTER_APIKEY"] = cleaned
+    elif provider_id == "freeai":
+        os.environ["FREEAI_APIKEY"] = cleaned
+    print(f"[LLM Provider] Updated runtime API key for '{provider_id}' (configured={bool(cleaned)})")
+
+
+def has_provider_api_key(provider_id: str) -> bool:
+    """Returns True if the provider has an API key configured (in environment or runtime)."""
+    if provider_id == "openai":
+        return openai_model.has_api_key()
+    if provider_id == "mistral":
+        return bool(os.getenv("MISTRAL_API_KEY"))
+    if provider_id == "openrouter":
+        return bool(os.getenv("OPENROUTER_APIKEY") or os.getenv("OPENROUTER_API_KEY"))
+    if provider_id == "freeai":
+        return bool(os.getenv("FREEAI_APIKEY") or os.getenv("FREEAI_API_KEY"))
+    return False
 
 
 def is_tool_calling_supported(
@@ -159,7 +223,7 @@ def is_tool_calling_supported(
 
     m_info = next((m for m in p_info["models"] if m["id"] == target_model), None)
     if not m_info:
-        return target_provider in ("mistral", "openrouter")
+        return target_provider in ("mistral", "openrouter", "openai")
 
     return bool(m_info.get("tool_calling_supported", False))
 
@@ -171,13 +235,22 @@ def is_vision_supported(
     target_provider = provider_id or _active_provider
     target_model = model_id or _active_model
 
+    # OpenAI supports multimodal vision directly across modern models
+    if target_provider == "openai":
+        return True
+
     p_info = next((p for p in AVAILABLE_PROVIDERS if p["id"] == target_provider), None)
     if not p_info:
         return False
 
     m_info = next((m for m in p_info["models"] if m["id"] == target_model), None)
     if not m_info:
-        return target_model == "openrouter/free" or "pixtral" in (target_model or "").lower()
+        return (
+            target_model == "openrouter/free"
+            or "pixtral" in (target_model or "").lower()
+            or "gpt-4" in (target_model or "").lower()
+            or "vision" in (target_model or "").lower()
+        )
 
     return bool(m_info.get("vision_supported", False))
 
@@ -193,6 +266,9 @@ def get_provider_info() -> dict:
         "active_vision_supported": is_vision_supported(
             _active_provider, _active_model
         ),
+        "api_keys_configured": {
+            p["id"]: has_provider_api_key(p["id"]) for p in AVAILABLE_PROVIDERS
+        },
         "providers": AVAILABLE_PROVIDERS,
     }
 
@@ -201,7 +277,24 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
     """Updates the active LLM provider and model."""
     global _active_provider, _active_model
 
-    if provider_id in ("freeai", "mistral", "openrouter"):
+    # Infer provider from model_id if provider_id is empty or omitted
+    if not provider_id and model_id:
+        lower = model_id.lower()
+        if (
+            lower.startswith("gpt-")
+            or lower.startswith("o1")
+            or lower.startswith("o3")
+            or "openai" in lower
+        ):
+            provider_id = "openai"
+        elif "/" in lower or lower.startswith("openrouter"):
+            provider_id = "openrouter"
+        elif lower == "qwen7b" or lower.startswith("freeai"):
+            provider_id = "freeai"
+        elif "mistral" in lower or "pixtral" in lower:
+            provider_id = "mistral"
+
+    if provider_id in ("freeai", "mistral", "openrouter", "openai"):
         _active_provider = provider_id
     else:
         print(f"[LLM Provider] Unknown provider '{provider_id}', keeping '{_active_provider}'.")
@@ -245,9 +338,16 @@ def stream_chat(
     pass_image = image
 
     if image:
-        if not native_vision:
+        # OpenAI models directly support image inputs without third-party or background vision extraction
+        if _active_provider == "openai" or native_vision:
             print(
-                f"[LLM Provider] Active model '{_active_model}' is text-only. "
+                f"[LLM Provider] Provider '{_active_provider}' model '{_active_model}' supports direct vision. "
+                f"Directly passing image with message."
+            )
+            pass_image = image
+        else:
+            print(
+                f"[LLM Provider] Active provider '{_active_provider}' model '{_active_model}' is text-only. "
                 f"Extracting visual features via background vision analyzer..."
             )
             visual_analysis = analyze_image(image)
@@ -256,10 +356,6 @@ def stream_chat(
             else:
                 effective_prompt = f"[Image description:\n{visual_analysis}]"
             pass_image = None
-        else:
-            print(
-                f"[LLM Provider] Model '{_active_model}' natively supports vision. Passing image directly."
-            )
 
     print(
         f"[LLM Provider] Routing stream_chat to provider='{_active_provider}', model='{_active_model}' "
@@ -287,6 +383,17 @@ def stream_chat(
             on_tool_activity=on_tool_activity,
             cancel_event=cancel_event,
         )
+    elif _active_provider == "openai":
+        yield from openai_model.stream_chat(
+            effective_prompt,
+            history,
+            model=_active_model,
+            image=pass_image,
+            tools_enabled=effective_tools_enabled,
+            max_tool_rounds=max_tool_rounds,
+            on_tool_activity=on_tool_activity,
+            cancel_event=cancel_event,
+        )
     else:
         yield from mistral_model.stream_chat(
             effective_prompt,
@@ -305,4 +412,6 @@ def classify_emotion(text: str) -> str:
         return freeai_model.classify_emotion(text, model=_active_model)
     elif _active_provider == "openrouter":
         return openrouter_model.classify_emotion(text, model=_active_model)
+    elif _active_provider == "openai":
+        return openai_model.classify_emotion(text, model=_active_model)
     return mistral_model.classify_emotion(text)

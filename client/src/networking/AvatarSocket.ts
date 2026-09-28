@@ -50,16 +50,38 @@ class AvatarSocket {
   private pendingLlmProvider: { provider: string; model?: string } | null = (() => {
     if (typeof window === "undefined") return null;
     const params = new URLSearchParams(window.location.search);
-    const provider = params.get("provider") || localStorage.getItem("akari_llm_provider") || "mistral";
-    const model = params.get("model") || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
+    const urlModel = params.get("model");
+    const model = urlModel || localStorage.getItem("akari_llm_model") || "ministral-8b-latest";
+    let provider = localStorage.getItem("akari_llm_provider") || "mistral";
+
+    if (urlModel) {
+      const lower = urlModel.toLowerCase();
+      if (
+        lower.startsWith("gpt-") ||
+        lower.startsWith("o1") ||
+        lower.startsWith("o3") ||
+        lower.startsWith("chatgpt")
+      ) {
+        provider = "openai";
+      } else if (lower.includes("/") || lower.startsWith("openrouter")) {
+        provider = "openrouter";
+      } else if (lower === "qwen7b" || lower.startsWith("freeai")) {
+        provider = "freeai";
+      } else if (
+        lower.startsWith("ministral") ||
+        lower.startsWith("mistral") ||
+        lower.startsWith("pixtral") ||
+        lower.startsWith("open-mistral")
+      ) {
+        provider = "mistral";
+      }
+    }
     return { provider, model };
   })();
   private pendingToolCalling: { enabled: boolean; maxCalls?: number } | null = (() => {
     if (typeof window === "undefined") return null;
-    const params = new URLSearchParams(window.location.search);
-    const paramTools = params.get("tools");
     const storedTools = localStorage.getItem("akari_tool_calling_enabled");
-    const enabled = paramTools !== null ? paramTools === "true" : storedTools === "true";
+    const enabled = storedTools !== null ? storedTools === "true" : true;
     return { enabled, maxCalls: 5 };
   })();
 
@@ -158,6 +180,20 @@ class AvatarSocket {
     }
   }
 
+  /**
+   * Updates an API key on the backend (e.g. "openai").
+   */
+  setApiKey(provider: string, apiKey: string) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log(`[AvatarSocket] Sending set_api_key: provider=${provider}`);
+      this.send({
+        type: "set_api_key",
+        provider,
+        api_key: apiKey,
+      });
+    }
+  }
+
   connect() {
     if (
       this.socket &&
@@ -194,6 +230,13 @@ class AvatarSocket {
       // Synchronize tool calling state with server
       if (this.pendingToolCalling) {
         this.setToolCalling(this.pendingToolCalling.enabled, this.pendingToolCalling.maxCalls);
+      }
+      // Synchronize stored API key with server
+      if (typeof window !== "undefined") {
+        const storedOpenAiKey = localStorage.getItem("akari_openai_api_key");
+        if (storedOpenAiKey) {
+          this.setApiKey("openai", storedOpenAiKey);
+        }
       }
     };
 

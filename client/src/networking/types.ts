@@ -21,6 +21,57 @@ export interface SpeechTimeline {
   frames: VisemeFrame[];
 }
 
+export interface ChatAttachment {
+  type: "image";
+  mime_type: string;
+  data: string; // base64 Data URI
+  name?: string;
+  width?: number;
+  height?: number;
+  size_bytes?: number;
+}
+
+export interface ChatMessagePayload {
+  type: "chat_message";
+  text: string;
+  attachments?: ChatAttachment[];
+  image?: string; // backward compatibility
+  provider?: string;
+  model?: string;
+  tools_enabled?: boolean;
+  timezone?: string;
+}
+
+export interface AvailableToolInfo {
+  id: string;
+  name: string;
+  description: string;
+  enabled?: boolean;
+}
+
+export interface LlmModelOption {
+  id: string;
+  name: string;
+  tool_calling_supported?: boolean;
+  vision_supported?: boolean;
+}
+
+export interface LlmProviderOption {
+  id: string;
+  name: string;
+  description: string;
+  default_model: string;
+  tool_calling_supported?: boolean;
+  vision_supported?: boolean;
+  models: LlmModelOption[];
+}
+
+export interface SetApiKeyPayload {
+  type: "set_api_key";
+  provider: string;
+  api_key: string;
+}
+
 export interface TranscriptEvent {
   type: "transcript";
   text: string;
@@ -31,7 +82,6 @@ export interface SpeechEvent {
   type: "speech";
   timeline: SpeechTimeline;
 }
-
 
 export interface EmotionEvent {
   type: "emotion";
@@ -74,30 +124,6 @@ export interface SpeechSegmentEvent {
   emotion?: string;
 }
 
-export interface LlmModelOption {
-  id: string;
-  name: string;
-  tool_calling_supported?: boolean;
-  vision_supported?: boolean;
-}
-
-export interface LlmProviderOption {
-  id: string;
-  name: string;
-  description: string;
-  default_model: string;
-  tool_calling_supported?: boolean;
-  vision_supported?: boolean;
-  models: LlmModelOption[];
-}
-
-export interface AvailableToolInfo {
-  id: string;
-  name: string;
-  description: string;
-  enabled?: boolean;
-}
-
 export interface ConfigEvent {
   type: "config";
   chat_input_enabled: boolean;
@@ -109,6 +135,7 @@ export interface ConfigEvent {
   vision_supported?: boolean;
   max_tool_calls?: number;
   available_tools?: AvailableToolInfo[];
+  api_keys_configured?: Record<string, boolean>;
 }
 
 export interface TranscriptionEvent {
@@ -131,27 +158,6 @@ export interface ToolEndEvent {
   tool: string;
 }
 
-export interface ChatAttachment {
-  type: "image";
-  mime_type: string;
-  data: string; // base64 Data URI
-  name?: string;
-  width?: number;
-  height?: number;
-  size_bytes?: number;
-}
-
-export interface ChatMessagePayload {
-  type: "chat_message";
-  text: string;
-  attachments?: ChatAttachment[];
-  image?: string; // backward compatibility
-  provider?: string;
-  model?: string;
-  tools_enabled?: boolean;
-  timezone?: string;
-}
-
 export type AvatarEvent =
   | TranscriptEvent
   | SpeechEvent
@@ -167,4 +173,10 @@ export type AvatarEvent =
   | TranscriptionEvent
   | TurnEndEvent
   | ToolStartEvent
-  | ToolEndEvent;
+  | ToolEndEvent;
+
+/**
+ * Protocol Definitions for Avatar Networking
+ * Encompasses timeline payloads, audio segments, speech visemes, provider configs,
+ * and bidirectional client-server WebSocket communication primitives.
+ */
