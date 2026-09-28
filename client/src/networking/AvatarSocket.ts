@@ -194,6 +194,67 @@ class AvatarSocket {
     }
   }
 
+  /**
+   * Switches the active TTS voice engine ("fish" or "sovits").
+   */
+  setTtsEngine(engine: "fish" | "sovits") {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("akari_tts_engine", engine);
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log(`[AvatarSocket] Sending set_tts_engine: engine=${engine}`);
+      this.send({
+        type: "set_tts_engine",
+        engine,
+      });
+    }
+  }
+
+  /**
+   * Updates the public or local GPT-SoVITS connection URL on the backend.
+   */
+  setSovitsUrl(url: string) {
+    const trimmed = (url || "").trim();
+    if (typeof window !== "undefined") {
+      if (trimmed) {
+        localStorage.setItem("akari_gpt_sovits_url", trimmed);
+      } else {
+        localStorage.removeItem("akari_gpt_sovits_url");
+      }
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log(`[AvatarSocket] Sending set_sovits_url: url=${trimmed}`);
+      this.send({
+        type: "set_sovits_url",
+        url: trimmed,
+      });
+    }
+  }
+
+  /**
+   * Updates reference audio path, prompt text, and language parameters for GPT-SoVITS.
+   */
+  setSovitsParams(params: {
+    ref_audio?: string;
+    prompt_text?: string;
+    prompt_lang?: string;
+    text_lang?: string;
+  }) {
+    if (typeof window !== "undefined") {
+      if (params.ref_audio !== undefined) localStorage.setItem("akari_gpt_sovits_ref_audio", params.ref_audio);
+      if (params.prompt_text !== undefined) localStorage.setItem("akari_gpt_sovits_prompt_text", params.prompt_text);
+      if (params.prompt_lang !== undefined) localStorage.setItem("akari_gpt_sovits_prompt_lang", params.prompt_lang);
+      if (params.text_lang !== undefined) localStorage.setItem("akari_gpt_sovits_text_lang", params.text_lang);
+    }
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      console.log("[AvatarSocket] Sending set_sovits_params:", params);
+      this.send({
+        type: "set_sovits_params",
+        ...params,
+      });
+    }
+  }
+
   connect() {
     if (
       this.socket &&
@@ -231,11 +292,31 @@ class AvatarSocket {
       if (this.pendingToolCalling) {
         this.setToolCalling(this.pendingToolCalling.enabled, this.pendingToolCalling.maxCalls);
       }
-      // Synchronize stored API key with server
+      // Synchronize stored API key, TTS engine, and GPT-SoVITS URL with server
       if (typeof window !== "undefined") {
         const storedOpenAiKey = localStorage.getItem("akari_openai_api_key");
         if (storedOpenAiKey) {
           this.setApiKey("openai", storedOpenAiKey);
+        }
+        const storedTtsEngine = localStorage.getItem("akari_tts_engine") as ("fish" | "sovits") | null;
+        if (storedTtsEngine) {
+          this.setTtsEngine(storedTtsEngine);
+        }
+        const storedSovitsUrl = localStorage.getItem("akari_gpt_sovits_url");
+        if (storedSovitsUrl) {
+          this.setSovitsUrl(storedSovitsUrl);
+        }
+        const storedRefAudio = localStorage.getItem("akari_gpt_sovits_ref_audio");
+        const storedPromptText = localStorage.getItem("akari_gpt_sovits_prompt_text");
+        const storedPromptLang = localStorage.getItem("akari_gpt_sovits_prompt_lang");
+        const storedTextLang = localStorage.getItem("akari_gpt_sovits_text_lang");
+        if (storedRefAudio || storedPromptText || storedPromptLang || storedTextLang) {
+          this.setSovitsParams({
+            ref_audio: storedRefAudio || undefined,
+            prompt_text: storedPromptText || undefined,
+            prompt_lang: storedPromptLang || undefined,
+            text_lang: storedTextLang || undefined,
+          });
         }
       }
     };

@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   IconPencil,
   IconArrowRight,
   IconPlus,
   IconCamera,
+  IconCheck,
 } from "@tabler/icons-react";
+import { avatarSocket, avatarEvents, type ConfigEvent } from "../../networking";
 import "./OverviewScreen.css";
 
 interface OverviewScreenProps {
@@ -19,9 +21,53 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   onOpenSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<"overview" | "voice">("overview");
-  const [voiceEngine, setVoiceEngine] = useState<"fish" | "sovits">("fish");
+  const [voiceEngine, setVoiceEngine] = useState<"fish" | "sovits">(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("akari_tts_engine");
+      return stored === "sovits" ? "sovits" : "fish";
+    }
+    return "fish";
+  });
+  const [sovitsUrl, setSovitsUrl] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_gpt_sovits_url") || "";
+    }
+    return "";
+  });
+  const [isUrlSaved, setIsUrlSaved] = useState<boolean>(false);
+
+  // Sync state with live backend config broadcasts
+  useEffect(() => {
+    const unsubscribe = avatarEvents.subscribe("config", (event: ConfigEvent) => {
+      if (event.tts_engine) {
+        setVoiceEngine(event.tts_engine);
+      }
+      if (typeof event.sovits_url === "string") {
+        setSovitsUrl(event.sovits_url);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleSelectEngine = (engine: "fish" | "sovits") => {
+    setVoiceEngine(engine);
+    avatarSocket.setTtsEngine(engine);
+  };
+
+  const handleSaveSovitsUrl = () => {
+    const trimmed = sovitsUrl.trim();
+    avatarSocket.setSovitsUrl(trimmed);
+    setIsUrlSaved(true);
+    setTimeout(() => setIsUrlSaved(false), 2000);
+  };
+
+  const handleClearSovitsUrl = () => {
+    setSovitsUrl("");
+    avatarSocket.setSovitsUrl("");
+  };
 
   const displayName = character.charAt(0).toUpperCase() + character.slice(1);
+  const isSovitsConfigured = Boolean(sovitsUrl.trim());
 
   return (
     <div className="overview-screen-root" aria-label="Character Overview Screen">
@@ -96,22 +142,30 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
         {activeTab === "voice" && (
           <div className="panel-voice-section">
             <div className="panel-voice-header">
-              <span className="panel-voice-title">Voice</span>
-              <span className="panel-voice-config">Configure</span>
+              <span className="panel-voice-title">Audio Pipeline</span>
+              <span
+                className="panel-voice-config"
+                onClick={onOpenSettings}
+                title="Configure advanced audio settings"
+              >
+                Configure
+              </span>
             </div>
 
             <div className="panel-voice-toggles">
               <button
                 type="button"
                 className={`panel-voice-toggle-btn ${voiceEngine === "fish" ? "active" : ""}`}
-                onClick={() => setVoiceEngine("fish")}
+                onClick={() => handleSelectEngine("fish")}
+                title="Use Fish Audio cloud voice pipeline"
               >
                 Fish Audio
               </button>
               <button
                 type="button"
                 className={`panel-voice-toggle-btn ${voiceEngine === "sovits" ? "active" : ""}`}
-                onClick={() => setVoiceEngine("sovits")}
+                onClick={() => handleSelectEngine("sovits")}
+                title="Use GPT-SoVITS public or local server instance"
               >
                 GPT-SoVITS
               </button>
@@ -119,9 +173,73 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
 
             <p className="panel-voice-caption">
               {voiceEngine === "fish"
-                ? "Fish Audio: Voice synthesized via Fish Audio pipeline."
-                : "GPT-SoVITS: Voice reference model synthesized locally."}
+                ? "Fish Audio: Voice synthesized via cloud Fish Audio pipeline."
+                : "GPT-SoVITS: Voice synthesized via public or local GPT-SoVITS server."}
             </p>
+
+            {/* GPT-SoVITS Connection Details Card */}
+            {voiceEngine === "sovits" && (
+              <div className="panel-sovits-config-card">
+                <div className="sovits-field-header">
+                  <span className="sovits-field-label">Connection URL</span>
+                  <span className={`sovits-status-tag ${isSovitsConfigured ? "ready" : "needed"}`}>
+                    <span className="sovits-status-dot" />
+                    <span>{isSovitsConfigured ? "Connected" : "URL Needed"}</span>
+                  </span>
+                </div>
+
+                <div className="sovits-input-row">
+                  <input
+                    type="url"
+                    className="sovits-url-input"
+                    placeholder="http://127.0.0.1:9880 or https://..."
+                    value={sovitsUrl}
+                    onChange={(e) => setSovitsUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveSovitsUrl()}
+                    spellCheck={false}
+                    aria-label="GPT-SoVITS Server URL"
+                  />
+                </div>
+
+                <div className="sovits-actions-row">
+                  <button
+                    type="button"
+                    className={`sovits-save-btn ${isUrlSaved ? "saved" : ""}`}
+                    onClick={handleSaveSovitsUrl}
+                  >
+                    {isUrlSaved ? (
+                      <>
+                        <IconCheck size={13} stroke={2.5} />
+                        <span>Saved</span>
+                      </>
+                    ) : (
+                      <span>Save & Connect</span>
+                    )}
+                  </button>
+                  {sovitsUrl && (
+                    <button
+                      type="button"
+                      className="sovits-clear-btn"
+                      onClick={handleClearSovitsUrl}
+                      title="Clear configured URL"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Fish Audio Active Info */}
+            {voiceEngine === "fish" && (
+              <div className="panel-fish-info-box">
+                <div className="fish-status-line">
+                  <span className="sovits-status-dot ready" />
+                  <span>Cloud Engine Active</span>
+                </div>
+                <span className="fish-model-note">Preset: <code>s2.1-pro-free</code></span>
+              </div>
+            )}
           </div>
         )}
 

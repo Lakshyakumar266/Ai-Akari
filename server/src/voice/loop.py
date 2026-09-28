@@ -215,33 +215,37 @@ async def run_voice_loop(stop_event: threading.Event | None = None):
                 def gen_unit(u: str) -> tuple[str, bytes]:
                     return u, convert_to_wav(u)
 
-                # Generate TTS audio for each dialogue unit in parallel
-                with ThreadPoolExecutor(max_workers=max(1, len(units_with_emotions))) as executor:
-                    generated = await asyncio.to_thread(
-                        lambda: list(executor.map(gen_unit, unit_texts))
-                    )
+                try:
+                    with ThreadPoolExecutor(max_workers=max(1, len(units_with_emotions))) as executor:
+                        generated = await asyncio.to_thread(
+                            lambda: list(executor.map(gen_unit, unit_texts))
+                        )
+                except Exception as e:
+                    print(f"[VoiceLoop] TTS synthesis error: {e}")
+                    generated = []
 
                 if stop_event and stop_event.is_set():
                     break
 
-                dispatch(speech_start())
+                if generated:
+                    dispatch(speech_start())
 
-                for i, ((u_text, u_emotion), (_, wav_bytes)) in enumerate(zip(units_with_emotions, generated)):
-                    b64_audio = base64.b64encode(wav_bytes).decode("ascii")
-                    data_uri = f"data:audio/wav;base64,{b64_audio}"
-                    dispatch(
-                        speech_segment(
-                            text=u_text if ENABLE_SUBTITLES else "",
-                            audio=data_uri,
-                            is_last=(i == len(units_with_emotions) - 1),
-                            segment_index=i,
-                            total_segments=len(units_with_emotions),
-                            emotion=u_emotion if emotion_mgr.mode == "synced" else None,
+                    for i, ((u_text, u_emotion), (_, wav_bytes)) in enumerate(zip(units_with_emotions, generated)):
+                        b64_audio = base64.b64encode(wav_bytes).decode("ascii")
+                        data_uri = f"data:audio/wav;base64,{b64_audio}"
+                        dispatch(
+                            speech_segment(
+                                text=u_text if ENABLE_SUBTITLES else "",
+                                audio=data_uri,
+                                is_last=(i == len(units_with_emotions) - 1),
+                                segment_index=i,
+                                total_segments=len(units_with_emotions),
+                                emotion=u_emotion if emotion_mgr.mode == "synced" else None,
+                            )
                         )
-                    )
 
-                dispatch(turn_end())
-                emotion_mgr.on_speech_concluded(dispatch)
+                    dispatch(turn_end())
+                    emotion_mgr.on_speech_concluded(dispatch)
 
             history.append(
                 UserMessage(

@@ -21,6 +21,14 @@ from src.llm import (
 )
 from src.config import TOOL_CALLING_ENABLED, MAX_TOOL_CALL_ROUNDS
 from src.tools import tool_registry
+from src.tts.text_to_speech import get_active_tts_engine, set_active_tts_engine
+from src.tts.sovits_client import (
+    get_sovits_url,
+    set_sovits_url,
+    has_sovits_url,
+    get_sovits_params,
+    set_sovits_params,
+)
 
 HOST = "127.0.0.1"
 PORT = 8765
@@ -38,6 +46,7 @@ def _build_config_dict() -> dict:
     active_mod = provider_info["active_model"]
     supported = is_tool_calling_supported(active_prov, active_mod)
     vision_supported = is_vision_supported(active_prov, active_mod)
+    sovits_params = get_sovits_params()
     return {
         "type": "config",
         "chat_input_enabled": _chat_input_enabled,
@@ -50,6 +59,14 @@ def _build_config_dict() -> dict:
         "max_tool_calls": _max_tool_calls,
         "available_tools": tool_registry.get_tools_summary(),
         "api_keys_configured": provider_info.get("api_keys_configured", {}),
+        "tts_engine": get_active_tts_engine(),
+        "sovits_url": get_sovits_url(),
+        "sovits_url_configured": has_sovits_url(),
+        "sovits_ref_audio": sovits_params.get("ref_audio", ""),
+        "sovits_prompt_text": sovits_params.get("prompt_text", ""),
+        "sovits_prompt_lang": sovits_params.get("prompt_lang", "en"),
+        "sovits_text_lang": sovits_params.get("text_lang", "auto"),
+        "available_tts_engines": ["fish", "sovits"],
     }
 
 
@@ -421,6 +438,40 @@ async def client_handler(websocket: ServerConnection):
                             f"[Bridge] Tool calling updated: {_tool_calling_enabled} (max_calls={_max_tool_calls})"
                         )
 
+                    await broadcaster.broadcast(_build_config_dict())
+
+                elif msg_type == "set_tts_engine":
+                    engine = data.get("engine")
+                    if engine:
+                        set_active_tts_engine(engine)
+                        await broadcaster.broadcast(_build_config_dict())
+
+                elif msg_type == "set_sovits_url":
+                    url = data.get("url", "")
+                    set_sovits_url(url)
+                    await broadcaster.broadcast(_build_config_dict())
+
+                elif msg_type == "set_sovits_params":
+                    set_sovits_params(
+                        ref_audio=data.get("ref_audio"),
+                        prompt_text=data.get("prompt_text"),
+                        prompt_lang=data.get("prompt_lang"),
+                        text_lang=data.get("text_lang"),
+                    )
+                    await broadcaster.broadcast(_build_config_dict())
+
+                elif msg_type == "set_tts_config":
+                    if "engine" in data:
+                        set_active_tts_engine(data["engine"])
+                    if "sovits_url" in data:
+                        set_sovits_url(data["sovits_url"])
+                    if any(k in data for k in ("ref_audio", "prompt_text", "prompt_lang", "text_lang")):
+                        set_sovits_params(
+                            ref_audio=data.get("ref_audio"),
+                            prompt_text=data.get("prompt_text"),
+                            prompt_lang=data.get("prompt_lang"),
+                            text_lang=data.get("text_lang"),
+                        )
                     await broadcaster.broadcast(_build_config_dict())
 
                 elif msg_type == "chat_message":

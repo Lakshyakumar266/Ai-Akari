@@ -110,12 +110,48 @@ export interface ConfigEvent {
   max_tool_calls?: number;
   available_tools?: AvailableToolInfo[];
   api_keys_configured?: Record<string, boolean>;
+  tts_engine?: "fish" | "sovits";
+  sovits_url_configured?: boolean;
+  sovits_url?: string;
+  sovits_ref_audio?: string;
+  sovits_prompt_text?: string;
+  sovits_prompt_lang?: string;
+  sovits_text_lang?: string;
+  available_tts_engines?: string[];
 }
 
 export interface SetApiKeyPayload {
   type: "set_api_key";
   provider: string;
   api_key: string;
+}
+
+export interface SetTtsEnginePayload {
+  type: "set_tts_engine";
+  engine: "fish" | "sovits";
+}
+
+export interface SetSovitsUrlPayload {
+  type: "set_sovits_url";
+  url: string;
+}
+
+export interface SetSovitsParamsPayload {
+  type: "set_sovits_params";
+  ref_audio?: string;
+  prompt_text?: string;
+  prompt_lang?: string;
+  text_lang?: string;
+}
+
+export interface SetTtsConfigPayload {
+  type: "set_tts_config";
+  engine?: "fish" | "sovits";
+  sovits_url?: string;
+  ref_audio?: string;
+  prompt_text?: string;
+  prompt_lang?: string;
+  text_lang?: string;
 }
 
 export interface TranscriptionEvent {

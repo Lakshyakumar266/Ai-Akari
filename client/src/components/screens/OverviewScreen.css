@@ -251,6 +251,168 @@
   margin: 0;
 }
 
+/* ─── GPT-SoVITS Configuration Card in Overview Screen ────────────── */
+.panel-sovits-config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 2px;
+}
+
+.sovits-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sovits-field-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+}
+
+.sovits-status-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+}
+
+.sovits-status-tag.ready {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.sovits-status-tag.needed {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.sovits-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sovits-status-dot.ready {
+  background: #10b981;
+}
+
+.sovits-input-row {
+  width: 100%;
+}
+
+.sovits-url-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  padding: 6px 9px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sovits-url-input:focus {
+  border-color: #ec4899;
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2);
+}
+
+.sovits-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sovits-save-btn {
+  flex: 1;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ec4899, #d946ef);
+  color: #ffffff;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.sovits-save-btn:hover {
+  opacity: 0.92;
+}
+
+.sovits-save-btn.saved {
+  background: #10b981;
+}
+
+.sovits-clear-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.sovits-clear-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+/* ─── Fish Audio Info Box ─────────────────────────────────────────── */
+.panel-fish-info-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.fish-status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fish-model-note {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.fish-model-note code {
+  font-family: monospace;
+  color: #10b981;
+}
+
 /* Start chat CTA */
 .panel-start-chat-btn {
   height: 44px;

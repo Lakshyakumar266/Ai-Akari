@@ -18,6 +18,7 @@ import {
   IconKey,
   IconEye,
   IconEyeOff,
+  IconVolume,
 } from "@tabler/icons-react";
 import { avatarEvents, avatarSocket } from "../../networking";
 import "./SettingsScreen.css";
@@ -231,6 +232,46 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [isKeySaved, setIsKeySaved] = useState<boolean>(false);
   const [serverKeysConfigured, setServerKeysConfigured] = useState<Record<string, boolean>>({});
 
+  // Voice & Audio Pipeline state
+  const [ttsEngine, setTtsEngine] = useState<"fish" | "sovits">(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("akari_tts_engine");
+      return stored === "sovits" ? "sovits" : "fish";
+    }
+    return "fish";
+  });
+  const [sovitsUrl, setSovitsUrl] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_gpt_sovits_url") || "";
+    }
+    return "";
+  });
+  const [sovitsRefAudio, setSovitsRefAudio] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_gpt_sovits_ref_audio") || "";
+    }
+    return "";
+  });
+  const [sovitsPromptText, setSovitsPromptText] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_gpt_sovits_prompt_text") || "";
+    }
+    return "";
+  });
+  const [sovitsPromptLang, setSovitsPromptLang] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_gpt_sovits_prompt_lang") || "en";
+    }
+    return "en";
+  });
+  const [sovitsTextLang, setSovitsTextLang] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_gpt_sovits_text_lang") || "auto";
+    }
+    return "auto";
+  });
+  const [isSovitsSaved, setIsSovitsSaved] = useState<boolean>(false);
+
   // Sync state if props change from outside (e.g. browser back/forward)
   useEffect(() => {
     if (currentProvider && currentProvider !== provider) {
@@ -264,6 +305,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       }
       if (event.api_keys_configured) {
         setServerKeysConfigured(event.api_keys_configured);
+      }
+      if (event.tts_engine) {
+        setTtsEngine(event.tts_engine);
+      }
+      if (typeof event.sovits_url === "string") {
+        setSovitsUrl(event.sovits_url);
+      }
+      if (typeof event.sovits_ref_audio === "string") {
+        setSovitsRefAudio(event.sovits_ref_audio);
+      }
+      if (typeof event.sovits_prompt_text === "string") {
+        setSovitsPromptText(event.sovits_prompt_text);
+      }
+      if (typeof event.sovits_prompt_lang === "string") {
+        setSovitsPromptLang(event.sovits_prompt_lang);
+      }
+      if (typeof event.sovits_text_lang === "string") {
+        setSovitsTextLang(event.sovits_text_lang);
       }
     });
     return unsubscribe;
@@ -299,6 +358,37 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       localStorage.removeItem("akari_openai_api_key");
     }
     avatarSocket.setApiKey("openai", "");
+  };
+
+  const handleSelectTtsEngine = (engine: "fish" | "sovits") => {
+    setTtsEngine(engine);
+    avatarSocket.setTtsEngine(engine);
+  };
+
+  const handleSaveSovitsConfig = () => {
+    const trimmedUrl = sovitsUrl.trim();
+    avatarSocket.setSovitsUrl(trimmedUrl);
+    avatarSocket.setSovitsParams({
+      ref_audio: sovitsRefAudio.trim(),
+      prompt_text: sovitsPromptText.trim(),
+      prompt_lang: sovitsPromptLang.trim(),
+      text_lang: sovitsTextLang.trim(),
+    });
+    setIsSovitsSaved(true);
+    setTimeout(() => setIsSovitsSaved(false), 2500);
+  };
+
+  const handleClearSovitsConfig = () => {
+    setSovitsUrl("");
+    setSovitsRefAudio("");
+    setSovitsPromptText("");
+    avatarSocket.setSovitsUrl("");
+    avatarSocket.setSovitsParams({
+      ref_audio: "",
+      prompt_text: "",
+      prompt_lang: "en",
+      text_lang: "auto",
+    });
   };
 
   const handleSelectProvider = (newProviderId: "mistral" | "openai" | "freeai" | "openrouter") => {
@@ -809,6 +899,213 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <span>
                   Tool Calling is disabled because <strong>{activeModelDetail.name}</strong> lacks native function calling capabilities.
                 </span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ─── Dedicated Voice & Audio Pipeline Section ───────────────── */}
+        <section className="settings-section" aria-labelledby="voice-heading">
+          <div className="section-label-row">
+            <IconVolume size={16} className="section-icon" />
+            <span id="voice-heading" className="section-label">
+              Voice & Audio Pipeline
+            </span>
+            <span
+              className={`capability-status-tag ${
+                ttsEngine === "sovits"
+                  ? sovitsUrl.trim()
+                    ? "supported"
+                    : "unsupported"
+                  : "supported"
+              }`}
+            >
+              {ttsEngine === "fish"
+                ? "Fish Audio Cloud"
+                : sovitsUrl.trim()
+                ? "GPT-SoVITS Connected"
+                : "GPT-SoVITS URL Needed"}
+            </span>
+          </div>
+
+          <div className="voice-pipeline-card">
+            <div className="voice-engine-selector-row">
+              <button
+                type="button"
+                className={`voice-engine-choice-btn ${ttsEngine === "fish" ? "active" : ""}`}
+                onClick={() => handleSelectTtsEngine("fish")}
+              >
+                <div className="choice-title-row">
+                  <span className="choice-name">Fish Audio</span>
+                  <span className="choice-pill cloud">Cloud Fast</span>
+                </div>
+                <span className="choice-desc">
+                  Low-latency cloud speech synthesis via Fish Audio SDK (s2.1-pro-free)
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className={`voice-engine-choice-btn ${ttsEngine === "sovits" ? "active" : ""}`}
+                onClick={() => handleSelectTtsEngine("sovits")}
+              >
+                <div className="choice-title-row">
+                  <span className="choice-name">GPT-SoVITS</span>
+                  <span className="choice-pill custom">Self-Hosted</span>
+                </div>
+                <span className="choice-desc">
+                  High-fidelity voice cloning via public or local server instance (/tts)
+                </span>
+              </button>
+            </div>
+
+            {/* GPT-SoVITS Server URL & Parameters Card */}
+            {ttsEngine === "sovits" && (
+              <div className="sovits-settings-details">
+                <div className="api-key-header-row">
+                  <span className="api-key-title">GPT-SoVITS Server & Voice Cloning Settings</span>
+                  <span className={`api-key-status-pill ${sovitsUrl.trim() ? "active" : "inactive"}`}>
+                    <span className="status-dot" />
+                    <span>{sovitsUrl.trim() ? "Configured" : "URL Required"}</span>
+                  </span>
+                </div>
+
+                <p className="api-key-desc">
+                  Supports both standard FastAPI instances (<span className="code-hint">api_v2.py</span> / <span className="code-hint">api.py</span>) and Gradio WebUIs (<span className="code-hint">inference_webui.py</span>).
+                </p>
+
+                {/* Server URL Input */}
+                <div className="sovits-form-group">
+                  <label className="sovits-label" htmlFor="sovits-server-url">
+                    <span>Server Connection URL</span>
+                    <span className="sovits-label-badge">Required</span>
+                  </label>
+                  <div className="api-key-input-wrapper">
+                    <input
+                      id="sovits-server-url"
+                      type="url"
+                      className="api-key-input"
+                      placeholder="http://127.0.0.1:9880 or https://xxxx.trycloudflare.com or *.gradio.live"
+                      value={sovitsUrl}
+                      onChange={(e) => setSovitsUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveSovitsConfig()}
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-label="GPT-SoVITS Server URL"
+                    />
+                  </div>
+                </div>
+
+                {/* Reference Audio Path & Transcript Grid */}
+                <div className="sovits-grid-row">
+                  <div className="sovits-form-group">
+                    <label className="sovits-label" htmlFor="sovits-ref-audio">
+                      <span>Reference Audio Path (on Server)</span>
+                      <span className="sovits-label-badge">Required by api_v2</span>
+                    </label>
+                    <input
+                      id="sovits-ref-audio"
+                      type="text"
+                      className="api-key-input"
+                      placeholder="e.g. ref.wav, /content/sample.wav"
+                      value={sovitsRefAudio}
+                      onChange={(e) => setSovitsRefAudio(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  <div className="sovits-form-group">
+                    <label className="sovits-label" htmlFor="sovits-prompt-text">
+                      <span>Reference Prompt Text (Transcript)</span>
+                      <span className="sovits-label-badge optional">Recommended</span>
+                    </label>
+                    <input
+                      id="sovits-prompt-text"
+                      type="text"
+                      className="api-key-input"
+                      placeholder="Text spoken in the reference audio clip..."
+                      value={sovitsPromptText}
+                      onChange={(e) => setSovitsPromptText(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
+
+                {/* Languages Grid */}
+                <div className="sovits-grid-row">
+                  <div className="sovits-form-group">
+                    <label className="sovits-label" htmlFor="sovits-prompt-lang">
+                      <span>Reference Audio Language (prompt_lang)</span>
+                    </label>
+                    <select
+                      id="sovits-prompt-lang"
+                      className="sovits-select"
+                      value={sovitsPromptLang}
+                      onChange={(e) => setSovitsPromptLang(e.target.value)}
+                    >
+                      <option value="en">English (en)</option>
+                      <option value="ja">Japanese (ja)</option>
+                      <option value="zh">Chinese (zh)</option>
+                      <option value="ko">Korean (ko)</option>
+                      <option value="yue">Cantonese (yue)</option>
+                      <option value="auto">Auto-Detect (auto)</option>
+                    </select>
+                  </div>
+
+                  <div className="sovits-form-group">
+                    <label className="sovits-label" htmlFor="sovits-text-lang">
+                      <span>Target Speech Language (text_lang)</span>
+                    </label>
+                    <select
+                      id="sovits-text-lang"
+                      className="sovits-select"
+                      value={sovitsTextLang}
+                      onChange={(e) => setSovitsTextLang(e.target.value)}
+                    >
+                      <option value="auto">Auto-Detect (auto)</option>
+                      <option value="en">English (en)</option>
+                      <option value="ja">Japanese (ja)</option>
+                      <option value="zh">Chinese (zh)</option>
+                      <option value="ko">Korean (ko)</option>
+                      <option value="yue">Cantonese (yue)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="api-key-actions-row">
+                  <button
+                    type="button"
+                    className={`api-key-save-btn ${isSovitsSaved ? "saved" : ""}`}
+                    onClick={handleSaveSovitsConfig}
+                  >
+                    {isSovitsSaved ? (
+                      <>
+                        <IconCheck size={14} stroke={3} />
+                        <span>Configuration Saved & Synced</span>
+                      </>
+                    ) : (
+                      <span>Save & Sync Configuration</span>
+                    )}
+                  </button>
+                  {(sovitsUrl || sovitsRefAudio || sovitsPromptText) && (
+                    <button
+                      type="button"
+                      className="api-key-clear-btn"
+                      onClick={handleClearSovitsConfig}
+                    >
+                      Reset All
+                    </button>
+                  )}
+                </div>
+
+                <div className="api-key-security-note">
+                  <IconAlertCircle size={13} className="note-icon" />
+                  <span>
+                    Settings are stored locally in your browser and automatically synchronized to the Python backend session.
+                  </span>
+                </div>
               </div>
             )}
           </div>
