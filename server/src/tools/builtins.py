@@ -938,44 +938,46 @@ def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
     return None
 
 
-def web_search(query: str = "", max_results: int = 3, url: str | None = None, **kwargs: Any) -> dict[str, Any]:
+def fetch_web_page(url: str, **kwargs: Any) -> dict[str, Any]:
     """
-    Searches the live web or directly crawls and extracts content from a specific website or URL.
-    Uses Tavily AI Crawler/Extract with keyless mode per Tavily Agent Setup spec,
-    falling back to DuckDuckGo search or direct fetch when appropriate.
+    Fetches and extracts the readable text content of a specific website or URL.
+    Use this tool whenever the user provides a link, URL, or asks to check, inspect, or summarize a specific website.
+    """
+    clean_url = url.strip() if url else ""
+    if not clean_url:
+        return {"status": "error", "error": "URL cannot be empty."}
+
+    # Normalize protocol if domain only was passed
+    if not clean_url.startswith(("http://", "https://")):
+        clean_url = f"https://{clean_url}"
+
+    crawl_res = _crawl_target_url(clean_url)
+    if crawl_res:
+        return crawl_res
+
+    return {
+        "status": "error",
+        "error": f"Failed to fetch content from URL '{clean_url}'. The website may be unreachable or down.",
+    }
+
+
+def web_search(query: str = "", max_results: int = 3, **kwargs: Any) -> dict[str, Any]:
+    """
+    Searches the live web for general information, current news, facts, topics, or queries across the internet.
+    Uses Tavily AI Search (or DuckDuckGo fallback).
     """
     clean_query = query.strip() if query else ""
+    if not clean_query:
+        return {"status": "error", "error": "Search query cannot be empty."}
+
+    # Defensive fallback: If model called web_search with a pure URL/domain instead of fetch_web_page, delegate
+    target_url = _extract_url_or_domain(clean_query)
+    if target_url and (clean_query.startswith(("http://", "https://", "www.")) or clean_query.split()[0].lower() in target_url.lower()):
+        return fetch_web_page(url=target_url)
+
     num_results = max(1, min(5, int(max_results)))
 
-    # Step 1: Detect if a specific URL or domain was provided or requested
-    target_url = _extract_url_or_domain(url or clean_query)
-
-    should_crawl = False
-    if target_url:
-        if url:
-            should_crawl = True
-        elif clean_query.startswith(("http://", "https://", "www.")):
-            should_crawl = True
-        else:
-            lower_q = clean_query.lower()
-            site_intent_words = ("site", "website", "check", "crawl", "what is", "overview", "purpose", "inspect", "page", "homepage", "link")
-            if any(w in lower_q for w in site_intent_words):
-                should_crawl = True
-            elif clean_query.split()[0].lower() in target_url.lower():
-                should_crawl = True
-
-    if should_crawl and target_url:
-        crawl_res = _crawl_target_url(target_url)
-        if crawl_res:
-            return crawl_res
-
-    if not clean_query:
-        if target_url:
-            clean_query = target_url
-        else:
-            return {"status": "error", "error": "Search query or URL cannot be empty."}
-
-    # Step 2: Live Web Search (Tavily AI Search)
+    # Step 1: Live Web Search (Tavily AI Search)
     tavily_key = (os.getenv("TAVILY_API_KEY") or os.getenv("TAVILY_APIKEY") or "").strip()
     if tavily_key:
         try:
@@ -1269,18 +1271,14 @@ BUILTIN_TOOLS: list[Tool] = [
     ),
     Tool(
         name="web_search",
-        user_friendly_name="Web Search & Website Crawler",
-        description="Searches the live web, or directly crawls and extracts content from a specific website or URL. When a user provides a website link or domain, crawls the page directly.",
+        user_friendly_name="Web Search",
+        description="Searches the live web for general information, current news, facts, topics, or queries across the internet.",
         parameters={
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The search query, topic, or question to search the web for. If checking a website, this can be the URL or domain name.",
-                },
-                "url": {
-                    "type": "string",
-                    "description": "Optional specific website URL or domain to crawl directly (e.g. 'https://example.com' or 'example.com'). If provided or if query contains a URL, the tool directly crawls and reads that website.",
+                    "description": "The search query, topic, or question to search the web for (e.g. 'latest anime releases', 'current news in Tokyo', 'who won the match').",
                 },
                 "max_results": {
                     "type": "integer",
@@ -1290,6 +1288,23 @@ BUILTIN_TOOLS: list[Tool] = [
             "required": ["query"],
         },
         func=web_search,
+        enabled=True,
+    ),
+    Tool(
+        name="fetch_web_page",
+        user_friendly_name="Web Page Reader",
+        description="Fetches and extracts the readable text content of a specific website or URL. Use this tool whenever the user provides a link, URL, or asks to check, inspect, or summarize a specific website.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The full HTTP/HTTPS URL of the website to fetch and read (e.g. 'https://hermesworkspace.com' or 'example.com').",
+                },
+            },
+            "required": ["url"],
+        },
+        func=fetch_web_page,
         enabled=True,
     ),
 ]

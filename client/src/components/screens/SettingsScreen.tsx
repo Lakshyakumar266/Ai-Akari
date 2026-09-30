@@ -819,7 +819,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     </span>
                   </div>
                   <span className="tool-item-desc">
-                    Crawls live web & news via Tavily AI / DuckDuckGo
+                    Searches live web & news via Tavily AI / DuckDuckGo
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className={`tool-item-card ${
+                  isCurrentModelToolSupported && toolsEnabled ? "active" : "dormant"
+                }`}
+              >
+                <div className="tool-item-icon-box">
+                  <IconWorld size={16} />
+                </div>
+                <div className="tool-item-info">
+                  <div className="tool-item-name-row">
+                    <span className="tool-item-name">Web Page Reader</span>
+                    <span className="tool-item-status">
+                      {isCurrentModelToolSupported && toolsEnabled ? "Ready" : "Inactive"}
+                    </span>
+                  </div>
+                  <span className="tool-item-desc">
+                    Directly reads & summarizes specific URLs & websites
                   </span>
                 </div>
               </div>
