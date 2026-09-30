@@ -415,3 +415,22 @@ def classify_emotion(text: str) -> str:
     elif _active_provider == "openai":
         return openai_model.classify_emotion(text, model=_active_model)
     return mistral_model.classify_emotion(text)
+
+
+def classic_chat(
+    prompt: str,
+    history: list | None = None,
+    model_id: str | None = None,
+    image: str | None = None,
+) -> str:
+    """Routes one-shot classic_chat to the currently selected LLM provider."""
+    active_m = model_id or _active_model
+    hist = history or []
+    if _active_provider == "freeai":
+        return freeai_model.classic_chat(prompt, hist, model=active_m)
+    elif _active_provider == "openrouter":
+        return openrouter_model.classic_chat(prompt, hist, model=active_m, image=image)
+    elif _active_provider == "openai":
+        return openai_model.classic_chat(prompt, hist, model=active_m, image=image)
+    return mistral_model.classic_chat(prompt, hist, model_name=active_m, image=image)
+

@@ -32,7 +32,7 @@ from src.bridge.events import (
     thinking_start,
     thinking_end,
 )
-from src.llm import stream_chat
+from src.llm import stream_chat, compact_conversation_async, should_compact
 from src.tts.text_to_speech import convert_to_wav
 from src.voice.emotion_feature import (
     EmotionFeatureManager,
@@ -325,6 +325,8 @@ async def process_chat_message(
                 else:
                     _history.append(UserMessage(content=user_text))
                 _history.append(AssistantMessage(content=clean_reply))
+                if should_compact(_history):
+                    _history = await compact_conversation_async(_history)
         else:
             if not llm_task.done():
                 llm_task.cancel()

@@ -18,6 +18,7 @@ import {
   IconKey,
   IconEye,
   IconEyeOff,
+  IconSearch,
 } from "@tabler/icons-react";
 import { avatarEvents, avatarSocket } from "../../networking";
 import "./SettingsScreen.css";
@@ -798,6 +799,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   </div>
                   <span className="tool-item-desc">
                     Checks system health, OS runtime, and model status
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className={`tool-item-card ${
+                  isCurrentModelToolSupported && toolsEnabled ? "active" : "dormant"
+                }`}
+              >
+                <div className="tool-item-icon-box">
+                  <IconSearch size={16} />
+                </div>
+                <div className="tool-item-info">
+                  <div className="tool-item-name-row">
+                    <span className="tool-item-name">Web Search</span>
+                    <span className="tool-item-status">
+                      {isCurrentModelToolSupported && toolsEnabled ? "Ready" : "Inactive"}
+                    </span>
+                  </div>
+                  <span className="tool-item-desc">
+                    Crawls live web & news via Tavily AI / DuckDuckGo
                   </span>
                 </div>
               </div>
