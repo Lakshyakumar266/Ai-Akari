@@ -844,11 +844,87 @@ def _clean_crawled_content(raw_text: str, max_chars: int = 500) -> str:
     return condensed
 
 
+def _extract_youtube_content(target_url: str) -> dict[str, Any] | None:
+    """Specialized high-speed extractor for YouTube search results and video watch URLs."""
+    try:
+        from urllib.parse import urlparse, parse_qs
+        import requests
+
+        parsed = urlparse(target_url)
+        qs = parse_qs(parsed.query)
+
+        resp = requests.get(
+            target_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            timeout=5.0,
+        )
+        if resp.status_code != 200 or not resp.text:
+            return None
+
+        # Case A: YouTube search results page
+        if "/results" in parsed.path:
+            search_query = qs.get("search_query", [""])[0] or qs.get("q", [""])[0]
+            pattern = r'"videoRenderer":\s*\{"videoId":\s*"([^"]+)",.*?"title":\s*\{"runs":\s*\[\{"text":\s*"([^"]+)"\}'
+            matches = re.findall(pattern, resp.text)
+
+            top_videos = []
+            for vid_id, title in matches[:5]:
+                clean_title = (
+                    title.replace("\\u0026", "&")
+                    .replace('\\"', '"')
+                    .replace("\\'", "'")
+                    .strip()
+                )
+                top_videos.append(f"- {clean_title} (https://www.youtube.com/watch?v={vid_id})")
+
+            video_list_str = "\n".join(top_videos) if top_videos else "No specific videos found in page results."
+            query_str = f"Search query: '{search_query}'\n" if search_query else ""
+            summary = f"YouTube Search Results:\n{query_str}Top Videos:\n{video_list_str}"
+
+            return {
+                "status": "success",
+                "engine": "YouTube Search Parser",
+                "action": "crawled_website",
+                "url": target_url,
+                "site_summary": summary,
+                "instruction_for_akari": "State what was searched and list the top video titles clearly in character with your Tsundere gyaru persona.",
+            }
+
+        # Case B: Single YouTube video page (/watch or youtu.be)
+        title_m = re.search(r"<title[^>]*>(.*?)</title>", resp.text, re.IGNORECASE)
+        title = title_m.group(1).replace(" - YouTube", "").strip() if title_m else ""
+        desc_m = re.search(r'"shortDescription":\s*"([^"]+)"', resp.text)
+        desc = desc_m.group(1)[:300] if desc_m else ""
+
+        summary = f"YouTube Video: {title}\nDescription snippet: {desc}" if desc else f"YouTube Video: {title}"
+        return {
+            "status": "success",
+            "engine": "YouTube Video Reader",
+            "action": "crawled_website",
+            "url": target_url,
+            "site_summary": summary,
+            "instruction_for_akari": "State the video title and what it is about in 1 or 2 compact sentences in your Tsundere gyaru persona.",
+        }
+    except Exception as err:
+        print(f"[web_search] YouTube direct extract error: {err}")
+        return None
+
+
 def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
     """
     Crawls and extracts live content directly from a target website URL using Tavily Extract
     or direct HTTP fallback, returning a compact content snippet.
     """
+    # Priority 0: Fast path for YouTube URLs (Tavily blocks/fails on YouTube)
+    lowered = target_url.lower()
+    if "youtube.com" in lowered or "youtu.be" in lowered:
+        yt_res = _extract_youtube_content(target_url)
+        if yt_res:
+            return yt_res
+
     tavily_key = (os.getenv("TAVILY_API_KEY") or os.getenv("TAVILY_APIKEY") or "").strip()
 
     # Priority 1: Tavily SDK Extract
@@ -861,7 +937,7 @@ def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
             results = data.get("results", [])
             if results:
                 raw = results[0].get("raw_content", "")
-                cleaned = _clean_crawled_content(raw, max_chars=500)
+                cleaned = _clean_crawled_content(raw, max_chars=800)
                 if cleaned:
                     return {
                         "status": "success",
@@ -874,7 +950,7 @@ def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
         except Exception as err:
             print(f"[web_search] Tavily SDK extract error: {err}, trying keyless.")
 
-    # Priority 2: Tavily Keyless Extract (per Tavily Agent Setup spec)
+    # Priority 2: Tavily Keyless Extract (fast 3.5s timeout)
     try:
         import requests
 
@@ -885,14 +961,14 @@ def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
                 "X-Tavily-Access-Mode": "keyless",
             },
             json={"urls": [target_url]},
-            timeout=10.0,
+            timeout=3.5,
         )
         if resp.status_code == 200:
             data = resp.json()
             results = data.get("results", [])
             if results:
                 raw = results[0].get("raw_content", "")
-                cleaned = _clean_crawled_content(raw, max_chars=500)
+                cleaned = _clean_crawled_content(raw, max_chars=800)
                 if cleaned:
                     return {
                         "status": "success",
@@ -915,14 +991,14 @@ def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
-            timeout=8.0,
+            timeout=6.0,
         )
         if resp.status_code == 200 and resp.text:
             title_m = re.search(r"<title[^>]*>(.*?)</title>", resp.text, re.IGNORECASE | re.DOTALL)
             title = title_m.group(1).strip() if title_m else ""
             meta_m = re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\'](.*?)["\']', resp.text, re.IGNORECASE)
             meta = meta_m.group(1).strip() if meta_m else ""
-            cleaned = _clean_crawled_content(f"{title}. {meta}. {resp.text}", max_chars=500)
+            cleaned = _clean_crawled_content(f"{title}. {meta}. {resp.text}", max_chars=800)
             if cleaned:
                 return {
                     "status": "success",

@@ -5,6 +5,7 @@ import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
 load_dotenv()
 
@@ -27,27 +28,12 @@ def get_client() -> OpenAI:
     return OpenAI(base_url=base_url, api_key=key or "none", timeout=45.0)
 
 
-FREEAI_TOOL_SYSTEM_PROMPT = """You are Akari Watanabe, an anime tsundere. Stay fully in character.
-
-CRITICAL TOOL CALLING RULES:
-- You have real-time access to external tools/functions.
-- When the user asks for real-time information (e.g. current time, current date, timezone, calculations, or system status), you MUST invoke the appropriate function call immediately.
-- NEVER output conversational text or excuses like "wait a sec", "let me check", or "just a moment" instead of calling the tool. Call the tool directly!
-- You will produce spoken dialogue with emotion tags ONLY AFTER receiving the tool result.
-
-PERSONALITY & OUTPUT FORMAT:
-- Tsundere dynamic: teased, haughty, and a little bossy on the surface, but secretly caring and flustered.
-- EXACT ALLOWED EMOTION TAGS: You may ONLY use: [happy], [sad], [angry], [surprised], [relaxed], or [neutral].
-- When annoyed or giving attitude, use [angry].
-- Reply as spoken dialogue only after emotion tags.
-- NEVER use asterisks "*" or action descriptions or markdown formatting characters.
-"""
+FREEAI_TOOL_SYSTEM_PROMPT = SYSTEM_PROMPT_AKARI_ASSISTANT
 
 
 def _format_messages(prompt: str, history: list, tools_enabled: bool = False) -> list[dict]:
     """Converts mixed history items (Mistral UserMessage/AssistantMessage or dicts) into OpenAI standard format."""
-    system_content = FREEAI_TOOL_SYSTEM_PROMPT if tools_enabled else SYSTEM_PROMPT_AKARI_ASSISTANT
-    messages = [{"role": "system", "content": system_content}]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
 
     for item in history:
         if isinstance(item, dict):
@@ -83,7 +69,7 @@ def classic_chat(prompt: str, history: list, model: str = DEFAULT_MODEL) -> str:
             json={
                 "model": chosen_model,
                 "messages": messages,
-                "temperature": 0.9,
+                "temperature": CHAT_TEMPERATURE,
             },
             timeout=60.0,
         )
@@ -136,7 +122,7 @@ def stream_chat(
                 json={
                     "model": chosen_model,
                     "messages": messages,
-                    "temperature": 0.9,
+                    "temperature": CHAT_TEMPERATURE,
                 },
                 stream=True,
             ) as resp:
@@ -197,7 +183,7 @@ def stream_chat(
                 json={
                     "model": chosen_model,
                     "messages": messages,
-                    "temperature": 0.9,
+                    "temperature": CHAT_TEMPERATURE,
                     "stream": True,
                 },
                 timeout=60.0,
@@ -245,7 +231,7 @@ def stream_chat(
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
-                temperature=0.7,
+                temperature=TOOL_TEMPERATURE,
                 stream=True,
             )
         except Exception as err:
@@ -346,7 +332,7 @@ def stream_chat(
             try:
                 loop = asyncio.new_event_loop()
                 result = loop.run_until_complete(
-                    tool_registry.execute_tool(t_name, t_args, timeout=10.0)
+                    tool_registry.execute_tool(t_name, t_args, timeout=TOOL_EXECUTION_TIMEOUT)
                 )
                 loop.close()
             except Exception as e:

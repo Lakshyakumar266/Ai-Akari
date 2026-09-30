@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from mistralai.client import Mistral
 from mistralai.client.models import UserMessage, SystemMessage, AssistantMessage
 from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
 load_dotenv()
 
@@ -34,7 +35,7 @@ def classic_chat(
     )
     try:
         chat_response = client.chat.complete(
-            model=active_model, messages=messages, temperature=0.9
+            model=active_model, messages=messages, temperature=CHAT_TEMPERATURE
         )
         return chat_response.choices[0].message.content or ""
     except Exception as err:
@@ -109,7 +110,7 @@ def stream_chat(
             stream = client.chat.stream(
                 model=active_model,
                 messages=messages,
-                temperature=0.9,
+                temperature=CHAT_TEMPERATURE,
             )
             for chunk in stream:
                 if cancel_event is not None and cancel_event.is_set():
@@ -130,7 +131,7 @@ def stream_chat(
             stream = client.chat.stream(
                 model=active_model,
                 messages=messages,
-                temperature=0.9,
+                temperature=CHAT_TEMPERATURE,
             )
             for chunk in stream:
                 if cancel_event is not None and cancel_event.is_set():
@@ -153,7 +154,7 @@ def stream_chat(
                 model=active_model,
                 messages=messages,
                 tools=tools,
-                temperature=0.9,
+                temperature=TOOL_TEMPERATURE,
             )
         except Exception as err:
             print(f"[Mistral] Tool stream error with model '{active_model}': {err}")
@@ -162,6 +163,7 @@ def stream_chat(
 
         tool_calls_dict: dict[str, dict] = {}
         finish_reason = None
+        round_content_chunks: list[str] = []
 
         for chunk in stream:
             if cancel_event is not None and cancel_event.is_set():
@@ -190,10 +192,12 @@ def stream_chat(
                             )
 
             if choice.delta.content:
-                yield choice.delta.content
+                round_content_chunks.append(choice.delta.content)
 
         if not tool_calls_dict or finish_reason != "tool_calls":
             # Direct response or completion without tool calls
+            for c in round_content_chunks:
+                yield c
             break
 
         # Model requested tool execution
@@ -224,7 +228,7 @@ def stream_chat(
             try:
                 loop = asyncio.new_event_loop()
                 result = loop.run_until_complete(
-                    tool_registry.execute_tool(t_name, t_args, timeout=10.0)
+                    tool_registry.execute_tool(t_name, t_args, timeout=TOOL_EXECUTION_TIMEOUT)
                 )
                 loop.close()
             except Exception as e:

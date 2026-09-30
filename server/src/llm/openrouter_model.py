@@ -17,6 +17,7 @@ from openai import OpenAI
 
 from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
 from src.tools import tool_registry
+from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
 load_dotenv()
 
@@ -88,7 +89,7 @@ def classic_chat(
         resp = client.chat.completions.create(
             model=chosen_model,
             messages=messages,
-            temperature=0.9,
+            temperature=CHAT_TEMPERATURE,
         )
         return resp.choices[0].message.content or ""
     except Exception as err:
@@ -121,7 +122,7 @@ def stream_chat(
             stream = client.chat.completions.create(
                 model=chosen_model,
                 messages=messages,
-                temperature=0.9,
+                temperature=CHAT_TEMPERATURE,
                 stream=True,
             )
             for chunk in stream:
@@ -144,7 +145,7 @@ def stream_chat(
             stream = client.chat.completions.create(
                 model=chosen_model,
                 messages=messages,
-                temperature=0.9,
+                temperature=CHAT_TEMPERATURE,
                 stream=True,
             )
             for chunk in stream:
@@ -172,7 +173,7 @@ def stream_chat(
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
-                temperature=0.7,
+                temperature=TOOL_TEMPERATURE,
                 stream=True,
             )
         except Exception as err:
@@ -260,7 +261,7 @@ def stream_chat(
             try:
                 loop = asyncio.new_event_loop()
                 result = loop.run_until_complete(
-                    tool_registry.execute_tool(t_name, t_args, timeout=10.0)
+                    tool_registry.execute_tool(t_name, t_args, timeout=TOOL_EXECUTION_TIMEOUT)
                 )
                 loop.close()
             except Exception as e:
