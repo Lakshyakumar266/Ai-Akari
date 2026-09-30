@@ -37,6 +37,8 @@ from src.bridge.events import (
 from src.llm import (
     stream_chat,
     classify_emotion,
+    compact_conversation_async,
+    should_compact,
 )
 
 
@@ -254,6 +256,8 @@ async def run_voice_loop(stop_event: threading.Event | None = None):
                     content=clean_reply
                 )
             )
+            if should_compact(history):
+                history = await compact_conversation_async(history)
         except asyncio.CancelledError:
             print("[VoiceLoop] Voice loop task cancelled.")
             break

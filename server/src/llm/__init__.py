@@ -1,5 +1,6 @@
 from .provider import (
     stream_chat,
+    classic_chat,
     classify_emotion,
     get_provider_info,
     set_active_provider,
@@ -9,9 +10,11 @@ from .provider import (
     is_vision_supported,
     AVAILABLE_PROVIDERS,
 )
+from .compactor import compact_conversation, compact_conversation_async, should_compact
 
 __all__ = [
     "stream_chat",
+    "classic_chat",
     "classify_emotion",
     "get_provider_info",
     "set_active_provider",
@@ -20,4 +23,8 @@ __all__ = [
     "is_tool_calling_supported",
     "is_vision_supported",
     "AVAILABLE_PROVIDERS",
+    "compact_conversation",
+    "compact_conversation_async",
+    "should_compact",
 ]
+

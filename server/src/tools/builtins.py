@@ -4,6 +4,7 @@ import ast
 import datetime
 import math
 import operator
+import os
 import platform
 import sys
 import re
@@ -784,6 +785,297 @@ def get_system_status() -> dict[str, Any]:
     }
 
 
+_URL_REGEX = re.compile(r"https?://[^\s,\"\'<>]+", re.IGNORECASE)
+_DOMAIN_REGEX = re.compile(
+    r"\b(?:[a-zA-Z0-9-]+\.)+(?:com|org|net|io|ai|co|edu|gov|app|dev|sh|site|me|xyz|info|biz|tech|online|store|cloud)(?:/[^\s,\"\'<>]*)?\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_url_or_domain(text: str) -> str | None:
+    """Extracts a valid URL or bare domain from the given string."""
+    if not text:
+        return None
+    url_m = _URL_REGEX.search(text)
+    if url_m:
+        return url_m.group(0).rstrip(".,;!?)")
+    dom_m = _DOMAIN_REGEX.search(text)
+    if dom_m:
+        raw = dom_m.group(0).rstrip(".,;!?)")
+        if not raw.startswith(("http://", "https://")):
+            return f"https://{raw}"
+        return raw
+    return None
+
+
+def _clean_crawled_content(raw_text: str, max_chars: int = 500) -> str:
+    """Strips markdown links/images/tags and condenses website content to a compact string."""
+    if not raw_text:
+        return ""
+    # Strip markdown images
+    text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_text)
+    # Strip markdown links, preserving link text separated by space
+    text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1 ", text)
+    # Strip raw HTML tags
+    text = re.sub(r"<[^>]+>", " ", text)
+
+    # Filter navigation lines
+    nav_keywords = {
+        "home", "about", "blog", "contact", "pricing", "sign in", "login",
+        "register", "product", "socials", "founder", "founders"
+    }
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    meaningful: list[str] = []
+    for line in lines:
+        if line.lower() in nav_keywords:
+            continue
+        meaningful.append(line)
+
+    condensed = " ".join(meaningful)
+    condensed = re.sub(r"\s+", " ", condensed).strip()
+
+    if len(condensed) > max_chars:
+        cut = condensed[:max_chars]
+        last_space = cut.rfind(" ")
+        if last_space > 250:
+            condensed = cut[:last_space] + "..."
+        else:
+            condensed = cut + "..."
+    return condensed
+
+
+def _crawl_target_url(target_url: str) -> dict[str, Any] | None:
+    """
+    Crawls and extracts live content directly from a target website URL using Tavily Extract
+    or direct HTTP fallback, returning a compact content snippet.
+    """
+    tavily_key = (os.getenv("TAVILY_API_KEY") or os.getenv("TAVILY_APIKEY") or "").strip()
+
+    # Priority 1: Tavily SDK Extract
+    if tavily_key:
+        try:
+            from tavily import TavilyClient
+
+            client = TavilyClient(api_key=tavily_key)
+            data = client.extract(urls=[target_url])
+            results = data.get("results", [])
+            if results:
+                raw = results[0].get("raw_content", "")
+                cleaned = _clean_crawled_content(raw, max_chars=500)
+                if cleaned:
+                    return {
+                        "status": "success",
+                        "engine": "Tavily AI Website Crawler",
+                        "action": "crawled_website",
+                        "url": target_url,
+                        "site_summary": cleaned,
+                        "instruction_for_akari": "State what this website is in 1 or 2 compact sentences. Do not mention unrelated blogs or unnecessary details, and do not write long paragraphs.",
+                    }
+        except Exception as err:
+            print(f"[web_search] Tavily SDK extract error: {err}, trying keyless.")
+
+    # Priority 2: Tavily Keyless Extract (per Tavily Agent Setup spec)
+    try:
+        import requests
+
+        resp = requests.post(
+            "https://api.tavily.com/extract",
+            headers={
+                "Content-Type": "application/json",
+                "X-Tavily-Access-Mode": "keyless",
+            },
+            json={"urls": [target_url]},
+            timeout=10.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            results = data.get("results", [])
+            if results:
+                raw = results[0].get("raw_content", "")
+                cleaned = _clean_crawled_content(raw, max_chars=500)
+                if cleaned:
+                    return {
+                        "status": "success",
+                        "engine": "Tavily Keyless Website Crawler",
+                        "action": "crawled_website",
+                        "url": target_url,
+                        "site_summary": cleaned,
+                        "instruction_for_akari": "State what this website is in 1 or 2 compact sentences. Do not mention unrelated blogs or unnecessary details, and do not write long paragraphs.",
+                    }
+    except Exception as err:
+        print(f"[web_search] Tavily keyless extract error: {err}, falling back to direct fetch.")
+
+    # Priority 3: Direct HTTP GET Fallback
+    try:
+        import requests
+
+        resp = requests.get(
+            target_url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+            timeout=8.0,
+        )
+        if resp.status_code == 200 and resp.text:
+            title_m = re.search(r"<title[^>]*>(.*?)</title>", resp.text, re.IGNORECASE | re.DOTALL)
+            title = title_m.group(1).strip() if title_m else ""
+            meta_m = re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\'](.*?)["\']', resp.text, re.IGNORECASE)
+            meta = meta_m.group(1).strip() if meta_m else ""
+            cleaned = _clean_crawled_content(f"{title}. {meta}. {resp.text}", max_chars=500)
+            if cleaned:
+                return {
+                    "status": "success",
+                    "engine": "Direct Website Crawler",
+                    "action": "crawled_website",
+                    "url": target_url,
+                    "site_summary": cleaned,
+                    "instruction_for_akari": "State what this website is in 1 or 2 compact sentences. Do not mention unrelated blogs or unnecessary details, and do not write long paragraphs.",
+                }
+    except Exception as err:
+        print(f"[web_search] Direct fetch error: {err}")
+
+    return None
+
+
+def web_search(query: str = "", max_results: int = 3, url: str | None = None, **kwargs: Any) -> dict[str, Any]:
+    """
+    Searches the live web or directly crawls and extracts content from a specific website or URL.
+    Uses Tavily AI Crawler/Extract with keyless mode per Tavily Agent Setup spec,
+    falling back to DuckDuckGo search or direct fetch when appropriate.
+    """
+    clean_query = query.strip() if query else ""
+    num_results = max(1, min(5, int(max_results)))
+
+    # Step 1: Detect if a specific URL or domain was provided or requested
+    target_url = _extract_url_or_domain(url or clean_query)
+
+    should_crawl = False
+    if target_url:
+        if url:
+            should_crawl = True
+        elif clean_query.startswith(("http://", "https://", "www.")):
+            should_crawl = True
+        else:
+            lower_q = clean_query.lower()
+            site_intent_words = ("site", "website", "check", "crawl", "what is", "overview", "purpose", "inspect", "page", "homepage", "link")
+            if any(w in lower_q for w in site_intent_words):
+                should_crawl = True
+            elif clean_query.split()[0].lower() in target_url.lower():
+                should_crawl = True
+
+    if should_crawl and target_url:
+        crawl_res = _crawl_target_url(target_url)
+        if crawl_res:
+            return crawl_res
+
+    if not clean_query:
+        if target_url:
+            clean_query = target_url
+        else:
+            return {"status": "error", "error": "Search query or URL cannot be empty."}
+
+    # Step 2: Live Web Search (Tavily AI Search)
+    tavily_key = (os.getenv("TAVILY_API_KEY") or os.getenv("TAVILY_APIKEY") or "").strip()
+    if tavily_key:
+        try:
+            from tavily import TavilyClient
+
+            client = TavilyClient(api_key=tavily_key)
+            data = client.search(
+                query=clean_query,
+                search_depth="basic",
+                include_answer=True,
+                max_results=num_results,
+            )
+            ai_answer = (data.get("answer") or "")[:350]
+            items = []
+            for item in data.get("results", []):
+                items.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "snippet": (item.get("content") or "")[:200],
+                })
+            return {
+                "status": "success",
+                "engine": "Tavily AI Crawler",
+                "query": clean_query,
+                "ai_summary": ai_answer,
+                "results": items,
+                "instruction_for_akari": "Answer in 1 or 2 compact sentences. Keep it short, natural, and concise.",
+            }
+        except Exception as err:
+            print(f"[web_search] Tavily SDK search error: {err}, trying keyless / fallback.")
+
+    # Step 3: Tavily Keyless Search Mode (per Tavily Agent Setup spec)
+    try:
+        import requests
+
+        resp = requests.post(
+            "https://api.tavily.com/search",
+            headers={
+                "Content-Type": "application/json",
+                "X-Tavily-Access-Mode": "keyless",
+            },
+            json={
+                "query": clean_query,
+                "search_depth": "basic",
+                "include_answer": True,
+                "max_results": num_results,
+            },
+            timeout=8.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            ai_answer = (data.get("answer") or "")[:350]
+            items = []
+            for item in data.get("results", []):
+                items.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "snippet": (item.get("content") or "")[:200],
+                })
+            return {
+                "status": "success",
+                "engine": "Tavily Keyless Search",
+                "query": clean_query,
+                "ai_summary": ai_answer,
+                "results": items,
+                "instruction_for_akari": "Answer in 1 or 2 compact sentences. Keep it short, natural, and concise.",
+            }
+    except Exception as err:
+        print(f"[web_search] Tavily keyless search error: {err}, falling back to DuckDuckGo.")
+
+    # Step 4: DuckDuckGo Search (local zero-auth fallback)
+    try:
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+
+        ddgs = DDGS()
+        raw_results = list(ddgs.text(clean_query, max_results=num_results))
+        items = []
+        for r in raw_results:
+            items.append({
+                "title": r.get("title", ""),
+                "url": r.get("href", ""),
+                "snippet": (r.get("body") or "")[:200],
+            })
+        return {
+            "status": "success",
+            "engine": "DuckDuckGo",
+            "query": clean_query,
+            "results": items,
+            "instruction_for_akari": "Answer in 1 or 2 compact sentences. Keep it short, natural, and concise.",
+        }
+    except Exception as err:
+        return {
+            "status": "error",
+            "error": f"Failed to perform web search for '{clean_query}': {err}",
+        }
+
+
 def get_available_tools() -> dict[str, Any]:
     """
     Returns a catalog of all currently enabled and registered tools with their purposes and usage instructions.
@@ -818,7 +1110,7 @@ BUILTIN_TOOLS: list[Tool] = [
             "required": [],
         },
         func=get_available_tools,
-        enabled=False,
+        enabled=True,
     ),
     Tool(
         name="get_current_time",
@@ -973,6 +1265,31 @@ BUILTIN_TOOLS: list[Tool] = [
             "required": [],
         },
         func=get_system_status,
+        enabled=True,
+    ),
+    Tool(
+        name="web_search",
+        user_friendly_name="Web Search & Website Crawler",
+        description="Searches the live web, or directly crawls and extracts content from a specific website or URL. When a user provides a website link or domain, crawls the page directly.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query, topic, or question to search the web for. If checking a website, this can be the URL or domain name.",
+                },
+                "url": {
+                    "type": "string",
+                    "description": "Optional specific website URL or domain to crawl directly (e.g. 'https://example.com' or 'example.com'). If provided or if query contains a URL, the tool directly crawls and reads that website.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of search results to return (1 to 5). Defaults to 3.",
+                },
+            },
+            "required": ["query"],
+        },
+        func=web_search,
         enabled=True,
     ),
 ]

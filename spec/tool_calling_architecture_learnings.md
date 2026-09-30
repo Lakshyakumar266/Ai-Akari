@@ -325,3 +325,109 @@ Without specifying an external city or country, the system **strictly defaults t
 5. Akari speaks the exact local time directly without claiming she is in a different timezone or assuming Tokyo/UTC.
 
 
+---
+
+## 12. Web Search & AI Crawler Integration (Tavily & DuckDuckGo)
+
+### 12.1 Objective & Capability
+To enable Akari to answer live real-world queries (current events, anime news, weather, facts, website content) without hallucination, the system implements a unified `web_search` tool adhering to the official **Tavily Agent Setup Specification** (`tavily.com/agent-setup/SKILL.md`):
+
+```text
+User asks: "What anime is Akari Watanabe from?" or "Latest news in Tokyo"
+                    ↓
+        Invoke `web_search(query)`
+                    ↓
+   Tier 1: TAVILY_API_KEY present?
+       ├── YES → `tavily-python` SDK / REST API (Basic search + synthesized AI answer)
+       └── NO  → Tier 2: Tavily Keyless Mode (`X-Tavily-Access-Mode: keyless`)
+                    ↓
+            Tier 2 Success?
+       ├── YES → Returns Tavily AI summary and top web results
+       └── NO  → Tier 3: DuckDuckGo fallback (`ddgs` / `duckduckgo_search`)
+                    ↓
+        Model receives clean JSON with `ai_summary` and `results`
+                    ↓
+        Synthesizes natural Tsundere gyaru response
+```
+
+### 12.2 Multi-Tier Search Engine Hierarchy
+1. **Tier 1 — Authenticated Tavily AI Crawler**:
+   - Uses the official `tavily-python` client with `search_depth="basic"`, `include_answer=True`, and `max_results=3`.
+   - Returns a structured AI summary answering the user's prompt directly, accompanied by verified source URLs and content snippets.
+2. **Tier 2 — Tavily Keyless Access**:
+   - Following `tavily.com/agent-setup/SKILL.md` Path E:
+     Sends header `X-Tavily-Access-Mode: keyless` to `https://api.tavily.com/search`.
+   - Allows zero-config Tavily AI Search and Answer synthesis out-of-the-box before the user configures an explicit API key.
+3. **Tier 3 — DuckDuckGo Local Scraper**:
+   - Uses `ddgs` (with `duckduckgo_search` fallback) to retrieve top search results without requiring an external API key or network authorization.
+
+---
+
+## 13. Conversation Compaction Architecture (Summary Buffer Memory)
+
+### 13.1 Problem Statement
+In extended voice and chat sessions, unbounded history growth creates two major failure modes:
+1. **Excessive Token Consumption & Latency**: Sending 30+ conversation turns causes high token usage, slower first-token latency, and higher costs.
+2. **Loss of Contextual Cohesion**: Older dialogue overwhelms the model's immediate context window.
+
+### 13.2 Threshold-Gated Compaction Subsystem (`server/src/llm/compactor.py`)
+Following production patterns established by LangChain (`ConversationSummaryBufferMemory`), OpenAI Assistants, and MemGPT:
+
+```text
+Turn Completed (UserMessage + AssistantMessage appended)
+                    ↓
+       Check `should_compact(history)`
+       ├── NO (< 16 messages and < 8,000 chars) → Return history unchanged (0 overhead)
+       └── YES (History is too big)
+                    ↓
+           Partition History:
+           - older_messages: all turns except last `keep_recent=6`
+           - recent_messages: untouched last 6 messages
+                    ↓
+           LLM Summarization Call (`provider.classic_chat`):
+           "Summarize transcript into dense factual memory: facts, preferences, topics, emotions."
+                    ↓
+           Replace older messages with structured Memory Context turn:
+           [UserMessage("[Context from earlier conversation:\n<summary>\n(Background memory)]")]
+           [AssistantMessage("[Understood, I remember everything we talked about.]")]
+           + recent_messages
+```
+
+### 13.3 Performance Characteristics
+- **Zero Overhead on Normal Turns**: The loop only invokes compaction when history surpasses the threshold. Turns 1–7 incur zero extra calls or latency.
+- **Immediate Flow Preservation**: Because `keep_recent=6` messages are preserved verbatim, immediate pronoun resolution (*"why did you say that?"*, *"tell me more about it"*) and recent tool returns are never lost.
+- **Fail-Safe Fallback**: If the summarization model call times out or encounters network errors, the compactor drops into a sliding-window truncation fallback so the conversation turn never fails.
+
+---
+
+## 14. Responsive 2-Column Grid & Container Containment
+
+### 14.1 UI Layout Hardening (`SettingsScreen.css`)
+- Replaced the inflexible `repeat(3, 1fr)` grid with `repeat(2, minmax(0, 1fr))`, with a responsive breakpoint collapsing to `1fr` on screens $\le 540\text{px}$.
+- Added `box-sizing: border-box;`, `min-width: 0;`, and `overflow: hidden;` across `.tools-master-card` and `.tool-item-card`.
+- Completely prevents tool cards from overflowing or cutting through the right border of the glassmorphic card container.
+
+---
+
+## 15. Direct Website Crawling vs. Search Routing & Strict Response Brevity
+
+### 15.1 The Search Misattribution Bug & Its Resolution
+- **Problem**: When a user asked about a specific URL or domain (e.g., `https://hermesworkspace.com/` or `hermesworkspace.com site overview and purpose`), a general search engine endpoint (`/search`) retrieves third-party articles or blog posts matching the keywords (such as an unrelated blog post about an open-source agent UI), resulting in inaccurate explanations and multi-paragraph rambling.
+- **Solution**: The `web_search` tool now employs **Intelligent URL/Domain Routing**:
+  1. Detects explicit `url` parameter or extracts URLs (`https?://...`) and valid domain patterns (`example.com`) directly from the search query.
+  2. If the query targets a specific website, it routes directly to `_crawl_target_url` using **Tavily Extract API** (`/extract`), pulling the live, verified content of the destination domain.
+  3. If Tavily Extract is unreachable or keyless mode is blocked, it falls back to a clean direct HTTP GET crawler.
+  4. If direct crawling fails, it falls through seamlessly to the multi-tier web search.
+
+### 15.2 Payload Condensation & Dual-Layer Brevity Enforcement
+To prevent the LLM from generating bloated multi-paragraph essays:
+1. **Payload-Level Text Condensation**:
+   - `_clean_crawled_content` strips raw markdown image tags, unwraps navigation links, eliminates boilerplate navigation lists (`home`, `about`, `blog`, etc.), and caps content at ~500 characters.
+2. **In-Payload Directive**:
+   - Every tool return payload includes an explicit `instruction_for_akari` field (e.g. *"State what this website is in 1 or 2 compact sentences. Do not mention unrelated blogs or unnecessary details, and do not write long paragraphs."*).
+3. **System Prompt Enforcement**:
+   - `SYSTEM_PROMPT_AKARI_ASSISTANT` and `SYSTEM_PROMPT_AKARI_CHARACTER_PLAYING` enforce mandatory conciseness (1–2 sentences typically), strictly prohibiting multi-paragraph essays, spec dumps, and unnecessary trivia.
+
+
+
+
