@@ -409,24 +409,30 @@ Turn Completed (UserMessage + AssistantMessage appended)
 
 ---
 
-## 15. Direct Website Crawling vs. Search Routing & Strict Response Brevity
+## 15. Industry-Standard Web Retrieval: Dual Tool Separation (`web_search` vs `fetch_web_page`)
 
-### 15.1 The Search Misattribution Bug & Its Resolution
-- **Problem**: When a user asked about a specific URL or domain (e.g., `https://hermesworkspace.com/` or `hermesworkspace.com site overview and purpose`), a general search engine endpoint (`/search`) retrieves third-party articles or blog posts matching the keywords (such as an unrelated blog post about an open-source agent UI), resulting in inaccurate explanations and multi-paragraph rambling.
-- **Solution**: The `web_search` tool now employs **Intelligent URL/Domain Routing**:
-  1. Detects explicit `url` parameter or extracts URLs (`https?://...`) and valid domain patterns (`example.com`) directly from the search query.
-  2. If the query targets a specific website, it routes directly to `_crawl_target_url` using **Tavily Extract API** (`/extract`), pulling the live, verified content of the destination domain.
-  3. If Tavily Extract is unreachable or keyless mode is blocked, it falls back to a clean direct HTTP GET crawler.
-  4. If direct crawling fails, it falls through seamlessly to the multi-tier web search.
+### 15.1 The Anti-Pattern of Parameter Overloading ("Guess Game")
+Attempting to overload a single `web_search` tool with optional `url` parameters and internal regex sniffing produces failure modes across LLMs:
+- LLMs possess strong pre-trained priors that any tool named `web_search` expects a search query, leading them to generate descriptive keyword queries (e.g., `"hermesworkspace.com site overview and purpose"`).
+- Search engines index third-party blog posts and forum discussions that match the keywords, returning unrelated articles instead of the actual destination domain.
 
-### 15.2 Payload Condensation & Dual-Layer Brevity Enforcement
-To prevent the LLM from generating bloated multi-paragraph essays:
-1. **Payload-Level Text Condensation**:
-   - `_clean_crawled_content` strips raw markdown image tags, unwraps navigation links, eliminates boilerplate navigation lists (`home`, `about`, `blog`, etc.), and caps content at ~500 characters.
-2. **In-Payload Directive**:
-   - Every tool return payload includes an explicit `instruction_for_akari` field (e.g. *"State what this website is in 1 or 2 compact sentences. Do not mention unrelated blogs or unnecessary details, and do not write long paragraphs."*).
-3. **System Prompt Enforcement**:
-   - `SYSTEM_PROMPT_AKARI_ASSISTANT` and `SYSTEM_PROMPT_AKARI_CHARACTER_PLAYING` enforce mandatory conciseness (1–2 sentences typically), strictly prohibiting multi-paragraph essays, spec dumps, and unnecessary trivia.
+### 15.2 The Unified Industry Architecture (Claude, OpenAI, Antigravity, Tavily)
+All production coding agents and foundation models separate search from URL extraction into **two distinct first-class tools**:
+
+| Tool | Antigravity / Gemini | Anthropic Claude | OpenAI | Akari Implementation | Purpose |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Search Engine** | `search_web` | `web_search` | `web_search` | `web_search(query)` | Queries live web for broad news, facts, and topics |
+| **URL Extractor** | `read_url_content` | `web_fetch` | `fetch_web_page` | `fetch_web_page(url)` | Directly fetches & parses content of a specific URL/site |
+
+### 15.3 Execution Mechanics & Guarantees
+1. **Deterministic Selection**:
+   - When {{user}} provides a link (`https://hermesworkspace.com/`) or says *"check this site"*, the LLM unambiguously selects `fetch_web_page(url="https://hermesworkspace.com/")`.
+2. **Defensive Safety Net**:
+   - If an LLM calls `web_search` with a raw URL or domain, `web_search` automatically delegates execution to `fetch_web_page(url=...)`.
+3. **Payload Condensation & Dual-Layer Brevity**:
+   - `_clean_crawled_content` eliminates navigation links, images, and boilerplate menus, capping text at ~500 characters.
+   - The tool payload includes an explicit instruction: `"instruction_for_akari": "State what this website is in 1 or 2 compact sentences. Do not mention unrelated blogs or unnecessary details, and do not write long paragraphs."`
+   - `SYSTEM_PROMPT_AKARI_ASSISTANT` reinforces mandatory conciseness (1–2 sentences max).
 
 
 
