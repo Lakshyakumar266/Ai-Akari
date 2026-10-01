@@ -315,6 +315,18 @@ export default function ChatInput({ character = "akari" }: ChatInputProps) {
     if (urlModel) {
       const lower = urlModel.toLowerCase();
       if (
+        lower.includes("gpt-oss") ||
+        lower.startsWith("mistral.ministral-3") ||
+        lower.includes("gemma-3") ||
+        lower.startsWith("qwen.qwen3-32b") ||
+        lower.startsWith("deepseek.v3") ||
+        lower.startsWith("mistral.mistral-large-3") ||
+        lower.startsWith("anthropic.claude-sonnet-5") ||
+        lower.startsWith("anthropic.claude-opus-5") ||
+        lower.startsWith("bedrock")
+      ) {
+        provider = "bedrock";
+      } else if (
         lower.startsWith("gpt-") ||
         lower.startsWith("o1") ||
         lower.startsWith("o3") ||

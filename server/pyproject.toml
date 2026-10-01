@@ -27,6 +27,7 @@ dependencies = [
     "tavily-python>=0.8.0",
     "tzdata>=2026.4",
     "websockets>=13.0",
+    "boto3>=1.43.107",
 ]
 
 [tool.uv]

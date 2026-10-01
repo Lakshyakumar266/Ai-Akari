@@ -57,6 +57,18 @@ class AvatarSocket {
     if (urlModel) {
       const lower = urlModel.toLowerCase();
       if (
+        lower.includes("gpt-oss") ||
+        lower.startsWith("mistral.ministral-3") ||
+        lower.includes("gemma-3") ||
+        lower.startsWith("qwen.qwen3-32b") ||
+        lower.startsWith("deepseek.v3") ||
+        lower.startsWith("mistral.mistral-large-3") ||
+        lower.startsWith("anthropic.claude-sonnet-5") ||
+        lower.startsWith("anthropic.claude-opus-5") ||
+        lower.startsWith("bedrock")
+      ) {
+        provider = "bedrock";
+      } else if (
         lower.startsWith("gpt-") ||
         lower.startsWith("o1") ||
         lower.startsWith("o3") ||
@@ -181,7 +193,7 @@ class AvatarSocket {
   }
 
   /**
-   * Updates an API key on the backend (e.g. "openai").
+   * Updates an API key on the backend (e.g. "openai", "bedrock").
    */
   setApiKey(provider: string, apiKey: string) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
@@ -192,6 +204,22 @@ class AvatarSocket {
         api_key: apiKey,
       });
     }
+  }
+
+  /**
+   * Requests the latest config payload from the backend server.
+   */
+  requestConfig() {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.send({ type: "get_config" });
+    }
+  }
+
+  /**
+   * Returns the most recently received config event from the backend.
+   */
+  getLastConfig(): ConfigEvent | null {
+    return this.lastConfig;
   }
 
   connect() {
@@ -231,13 +259,18 @@ class AvatarSocket {
       if (this.pendingToolCalling) {
         this.setToolCalling(this.pendingToolCalling.enabled, this.pendingToolCalling.maxCalls);
       }
-      // Synchronize stored API key with server
+      // Synchronize stored API keys with server
       if (typeof window !== "undefined") {
         const storedOpenAiKey = localStorage.getItem("akari_openai_api_key");
         if (storedOpenAiKey) {
           this.setApiKey("openai", storedOpenAiKey);
         }
+        const storedBedrockKey = localStorage.getItem("akari_bedrock_bearer_token");
+        if (storedBedrockKey) {
+          this.setApiKey("bedrock", storedBedrockKey);
+        }
       }
+      this.requestConfig();
     };
 
 
