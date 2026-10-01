@@ -61,10 +61,17 @@ uv run python -m src.main
   - **OpenRouter (Free Tier)**: Multi-model auto router, Ling 3.0 Flash, Liquid LFM, and Space Bunny.
   - **Free.ai Gateway**: Qwen 2.5 7B and Qwen 3 8B.
   - **Mistral AI**: Ministral 8B, Pixtral 12B, and Mistral Small.
-- **Speech & Audio Pipeline**:
-  - On-device speech-to-text with ambient-noise calibration and silence-based end-of-utterance detection
-  - In-character chat streamed token-by-token
-  - Low-latency TTS via Fish Audio's WebSocket API, piped to bundled mpv
+- **Built-in Tool Calling & Function Execution**:
+  - Live Google Web Search for real-time information retrieval
+  - System Analytics (CPU, memory, storage telemetry)
+  - Timezone-aware Clock, World Time, and Calendar tools
+  - Math & calculation evaluation
+- **Multimodal Vision & Image Input**:
+  - Native multimodal image understanding for supported models (Ministral 3, Qwen 3 VL, OpenAI GPT-4o, GPT-6 Luna, GPT-5.5)
+  - Automated background visual feature extraction for text-only foundation models
+- **Full-Duplex WebSocket Streaming Architecture**:
+  - Binary audio streaming for real-time live Whisper transcription (int16 PCM)
+  - Live token streaming, real-time emotion classification, and audio-reactive 3D lip sync
 
 ## License
 
