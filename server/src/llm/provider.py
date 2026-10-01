@@ -20,6 +20,7 @@ from . import mistral_model
 from . import openai_model
 from . import freeai_model
 from . import openrouter_model
+from . import bedrock_model
 from .vision import analyze_image
 
 load_dotenv()
@@ -162,6 +163,94 @@ AVAILABLE_PROVIDERS = [
             },
         ],
     },
+    {
+        "id": "bedrock",
+        "name": "AWS Bedrock",
+        "description": "Amazon Bedrock foundation models powered by AWS Bearer Token (Ministral, Gemma, Qwen, DeepSeek, Claude).",
+        "default_model": "mistral.ministral-3-8b-instruct",
+        "tool_calling_supported": True,
+        "vision_supported": False,
+        "models": [
+            {
+                "id": "mistral.ministral-3-8b-instruct",
+                "name": "Ministral 3 8B (Recommended)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "google.gemma-3-4b-it",
+                "name": "Google Gemma 3 4B (Fast)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "google.gemma-3-12b-it",
+                "name": "Google Gemma 3 12B",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "qwen.qwen3-32b",
+                "name": "Qwen 3 32B",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "deepseek.v3.1",
+                "name": "DeepSeek V3.1",
+                "tool_calling_supported": False,
+                "vision_supported": False,
+            },
+            {
+                "id": "mistral.ministral-3-14b-instruct",
+                "name": "Ministral 3 14B",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "mistral.mistral-large-3-675b-instruct",
+                "name": "Mistral Large 3 675B",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "openai.gpt-oss-120b",
+                "name": "OpenAI GPT-OSS 120B (Reasoning Flagship)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "openai.gpt-oss-20b",
+                "name": "OpenAI GPT-OSS 20B (Fast Reasoning)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "google.gemma-3-27b-it",
+                "name": "Google Gemma 3 27B",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "deepseek.v3.2",
+                "name": "DeepSeek V3.2",
+                "tool_calling_supported": False,
+                "vision_supported": False,
+            },
+            {
+                "id": "anthropic.claude-opus-5",
+                "name": "Claude Opus 5 (Catalog Preview)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "anthropic.claude-sonnet-5",
+                "name": "Claude Sonnet 5 (Catalog Preview)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+        ],
+    },
 ]
 
 # Initial provider detection
@@ -172,6 +261,8 @@ if (os.getenv("OPENROUTER_APIKEY") or os.getenv("OPENROUTER_API_KEY")) and not o
     _default_provider = "openrouter"
 if (os.getenv("OPENAI_API_KEY") or os.getenv("OPENAI_APIKEY")) and not os.getenv("MISTRAL_API_KEY"):
     _default_provider = "openai"
+if (os.getenv("AWS_BEARER_TOKEN_BEDROCK") or os.getenv("BEDROCK_API_KEY")) and not os.getenv("MISTRAL_API_KEY"):
+    _default_provider = "bedrock"
 
 _active_provider: str = os.getenv("DEFAULT_LLM_PROVIDER", _default_provider)
 
@@ -194,6 +285,8 @@ def set_provider_api_key(provider_id: str, api_key: str):
         os.environ["OPENROUTER_APIKEY"] = cleaned
     elif provider_id == "freeai":
         os.environ["FREEAI_APIKEY"] = cleaned
+    elif provider_id == "bedrock":
+        bedrock_model.set_api_key(cleaned)
     print(f"[LLM Provider] Updated runtime API key for '{provider_id}' (configured={bool(cleaned)})")
 
 
@@ -207,6 +300,8 @@ def has_provider_api_key(provider_id: str) -> bool:
         return bool(os.getenv("OPENROUTER_APIKEY") or os.getenv("OPENROUTER_API_KEY"))
     if provider_id == "freeai":
         return bool(os.getenv("FREEAI_APIKEY") or os.getenv("FREEAI_API_KEY"))
+    if provider_id == "bedrock":
+        return bedrock_model.has_api_key()
     return False
 
 
@@ -281,6 +376,16 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
     if not provider_id and model_id:
         lower = model_id.lower()
         if (
+            "gpt-oss" in lower
+            or "ministral-3" in lower
+            or "gemma-3" in lower
+            or "qwen3-32b" in lower
+            or "claude-sonnet-5" in lower
+            or "claude-opus-5" in lower
+            or lower.startswith("bedrock")
+        ):
+            provider_id = "bedrock"
+        elif (
             lower.startswith("gpt-")
             or lower.startswith("o1")
             or lower.startswith("o3")
@@ -294,7 +399,7 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
         elif "mistral" in lower or "pixtral" in lower:
             provider_id = "mistral"
 
-    if provider_id in ("freeai", "mistral", "openrouter", "openai"):
+    if provider_id in ("freeai", "mistral", "openrouter", "openai", "bedrock"):
         _active_provider = provider_id
     else:
         print(f"[LLM Provider] Unknown provider '{provider_id}', keeping '{_active_provider}'.")
@@ -394,6 +499,17 @@ def stream_chat(
             on_tool_activity=on_tool_activity,
             cancel_event=cancel_event,
         )
+    elif _active_provider == "bedrock":
+        yield from bedrock_model.stream_chat(
+            effective_prompt,
+            history,
+            model=_active_model,
+            image=pass_image,
+            tools_enabled=effective_tools_enabled,
+            max_tool_rounds=max_tool_rounds,
+            on_tool_activity=on_tool_activity,
+            cancel_event=cancel_event,
+        )
     else:
         yield from mistral_model.stream_chat(
             effective_prompt,
@@ -414,6 +530,8 @@ def classify_emotion(text: str) -> str:
         return openrouter_model.classify_emotion(text, model=_active_model)
     elif _active_provider == "openai":
         return openai_model.classify_emotion(text, model=_active_model)
+    elif _active_provider == "bedrock":
+        return bedrock_model.classify_emotion(text, model=_active_model)
     return mistral_model.classify_emotion(text)
 
 
@@ -432,5 +550,7 @@ def classic_chat(
         return openrouter_model.classic_chat(prompt, hist, model=active_m, image=image)
     elif _active_provider == "openai":
         return openai_model.classic_chat(prompt, hist, model=active_m, image=image)
+    elif _active_provider == "bedrock":
+        return bedrock_model.classic_chat(prompt, hist, model=active_m, image=image)
     return mistral_model.classic_chat(prompt, hist, model_name=active_m, image=image)
 

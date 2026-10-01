@@ -13,12 +13,26 @@ export function getDefaultModelForProvider(provider: string): string {
   if (provider === "openai") return "gpt-4o-mini";
   if (provider === "freeai") return "qwen7b";
   if (provider === "openrouter") return "openrouter/free";
+  if (provider === "bedrock") return "mistral.ministral-3-8b-instruct";
   return "ministral-8b-latest";
 }
 
 export function getProviderForModel(model: string, fallbackProvider?: string): string {
   if (!model) return fallbackProvider || DEFAULT_PROVIDER;
   const lower = model.toLowerCase();
+  if (
+    lower.includes("gpt-oss") ||
+    lower.startsWith("mistral.ministral-3") ||
+    lower.includes("gemma-3") ||
+    lower.startsWith("qwen.qwen3-32b") ||
+    lower.startsWith("deepseek.v3") ||
+    lower.startsWith("mistral.mistral-large-3") ||
+    lower.startsWith("anthropic.claude-sonnet-5") ||
+    lower.startsWith("anthropic.claude-opus-5") ||
+    lower.startsWith("bedrock")
+  ) {
+    return "bedrock";
+  }
   if (
     lower.startsWith("gpt-") ||
     lower.startsWith("o1") ||

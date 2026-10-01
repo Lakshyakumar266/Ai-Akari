@@ -42,7 +42,7 @@ interface ModelDetail {
 }
 
 interface ProviderDetail {
-  id: "mistral" | "openai" | "freeai" | "openrouter";
+  id: "mistral" | "openai" | "freeai" | "openrouter" | "bedrock";
   name: string;
   badge: string;
   toolCallingSupported: boolean;
@@ -210,6 +210,119 @@ const PROVIDERS: ProviderDetail[] = [
       },
     ],
   },
+  {
+    id: "bedrock",
+    name: "AWS Bedrock",
+    badge: "Enterprise",
+    toolCallingSupported: true,
+    visionSupported: false,
+    models: [
+      {
+        id: "mistral.ministral-3-8b-instruct",
+        name: "Ministral 3 8B",
+        badge: "Recommended",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "google.gemma-3-4b-it",
+        name: "Google Gemma 3 4B",
+        badge: "Fast",
+        context: "32k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "google.gemma-3-12b-it",
+        name: "Google Gemma 3 12B",
+        badge: "Smart",
+        context: "32k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "qwen.qwen3-32b",
+        name: "Qwen 3 32B",
+        badge: "High Reasoning",
+        context: "32k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "deepseek.v3.1",
+        name: "DeepSeek V3.1",
+        badge: "Reasoning",
+        context: "64k context",
+        toolCallingSupported: false,
+        visionSupported: false,
+      },
+      {
+        id: "mistral.ministral-3-14b-instruct",
+        name: "Ministral 3 14B",
+        badge: "Reasoning",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "mistral.mistral-large-3-675b-instruct",
+        name: "Mistral Large 3 675B",
+        badge: "Flagship",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "openai.gpt-oss-120b",
+        name: "OpenAI GPT-OSS 120B",
+        badge: "Reasoning Flagship",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "openai.gpt-oss-20b",
+        name: "OpenAI GPT-OSS 20B",
+        badge: "Fast Reasoning",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "google.gemma-3-27b-it",
+        name: "Google Gemma 3 27B",
+        badge: "Frontier",
+        context: "32k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "deepseek.v3.2",
+        name: "DeepSeek V3.2",
+        badge: "Deep Reasoning",
+        context: "64k context",
+        toolCallingSupported: false,
+        visionSupported: false,
+      },
+      {
+        id: "anthropic.claude-opus-5",
+        name: "Claude Opus 5",
+        badge: "Preview",
+        context: "200k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "anthropic.claude-sonnet-5",
+        name: "Claude Sonnet 5",
+        badge: "Preview",
+        context: "200k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+    ],
+  },
 ];
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -232,7 +345,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   });
   const [showKey, setShowKey] = useState<boolean>(false);
   const [isKeySaved, setIsKeySaved] = useState<boolean>(false);
-  const [serverKeysConfigured, setServerKeysConfigured] = useState<Record<string, boolean>>({});
+
+  const [bedrockToken, setBedrockToken] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("akari_bedrock_bearer_token") || "";
+    }
+    return "";
+  });
+  const [showBedrockToken, setShowBedrockToken] = useState<boolean>(false);
+  const [isBedrockKeySaved, setIsBedrockKeySaved] = useState<boolean>(false);
+
+  const [serverKeysConfigured, setServerKeysConfigured] = useState<Record<string, boolean>>(() => {
+    return avatarSocket.getLastConfig()?.api_keys_configured || {};
+  });
 
   // Sync state if props change from outside (e.g. browser back/forward)
   useEffect(() => {
@@ -255,6 +380,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   // Listen to live config broadcast from backend
   useEffect(() => {
+    avatarSocket.requestConfig();
+    const cached = avatarSocket.getLastConfig();
+    if (cached?.api_keys_configured) {
+      setServerKeysConfigured(cached.api_keys_configured);
+    }
+
     const unsubscribe = avatarEvents.subscribe("config", (event) => {
       if (event.llm_provider) {
         setProvider(event.llm_provider);
@@ -281,6 +412,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const isCurrentModelToolSupported = activeModelDetail?.toolCallingSupported ?? false;
   const isOpenAiConfigured = Boolean(openAiKey.trim() || serverKeysConfigured["openai"]);
+  const isBedrockConfigured = Boolean(bedrockToken.trim() || serverKeysConfigured["bedrock"]);
 
   const handleSaveApiKey = () => {
     const trimmed = openAiKey.trim();
@@ -304,7 +436,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     avatarSocket.setApiKey("openai", "");
   };
 
-  const handleSelectProvider = (newProviderId: "mistral" | "openai" | "freeai" | "openrouter") => {
+  const handleSaveBedrockToken = () => {
+    const trimmed = bedrockToken.trim();
+    if (typeof window !== "undefined") {
+      if (trimmed) {
+        localStorage.setItem("akari_bedrock_bearer_token", trimmed);
+      } else {
+        localStorage.removeItem("akari_bedrock_bearer_token");
+      }
+    }
+    avatarSocket.setApiKey("bedrock", trimmed);
+    setIsBedrockKeySaved(true);
+    setTimeout(() => setIsBedrockKeySaved(false), 2500);
+  };
+
+  const handleClearBedrockToken = () => {
+    setBedrockToken("");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("akari_bedrock_bearer_token");
+    }
+    avatarSocket.setApiKey("bedrock", "");
+  };
+
+  const handleSelectProvider = (newProviderId: "mistral" | "openai" | "freeai" | "openrouter" | "bedrock") => {
     if (newProviderId === provider) return;
     const targetProviderObj = PROVIDERS.find((p) => p.id === newProviderId)!;
     const defaultModelObj = targetProviderObj.models[0];
@@ -466,6 +620,98 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <span>
                   Keys are stored locally in your browser and synced directly to your running backend session.
                 </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ─── AWS Bedrock Bearer Token Configuration (When Bedrock is selected) ─── */}
+        {provider === "bedrock" && (
+          <section className="settings-section api-key-section" aria-labelledby="bedrock-heading">
+            <div className="section-label-row">
+              <IconKey size={16} className="section-icon" />
+              <span id="bedrock-heading" className="section-label">
+                AWS Bedrock Bearer Token
+              </span>
+              <span className={`api-key-status-pill ${isBedrockConfigured ? "configured" : "required"}`}>
+                <span className="status-dot" />
+                {isBedrockConfigured ? "Token Active" : "Token Required"}
+              </span>
+            </div>
+
+            <div className="api-key-card">
+              <p className="api-key-instructions">
+                Enter your Amazon Bedrock API key / Bearer Token (<span className="code-hint">bedrock-api-key-...</span>) to use Ministral 3, Gemma 3, Qwen 3, and Claude models.
+              </p>
+
+              <div className="api-key-input-wrapper">
+                <input
+                  type={showBedrockToken ? "text" : "password"}
+                  className="api-key-input"
+                  placeholder={
+                    serverKeysConfigured["bedrock"]
+                      ? "Configured in server .env (AWS_BEARER_TOKEN_BEDROCK)"
+                      : "bedrock-api-key-..."
+                  }
+                  value={bedrockToken}
+                  onChange={(e) => setBedrockToken(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveBedrockToken()}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  className="api-key-toggle-btn"
+                  onClick={() => setShowBedrockToken(!showBedrockToken)}
+                  title={showBedrockToken ? "Hide Bearer Token" : "Show Bearer Token"}
+                  aria-label={showBedrockToken ? "Hide Bearer Token" : "Show Bearer Token"}
+                >
+                  {showBedrockToken ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                </button>
+              </div>
+
+              <div className="api-key-actions-row">
+                <button
+                  type="button"
+                  className={`api-key-save-btn ${isBedrockKeySaved ? "saved" : ""}`}
+                  onClick={handleSaveBedrockToken}
+                >
+                  {isBedrockKeySaved ? (
+                    <>
+                      <IconCheck size={14} stroke={3} />
+                      <span>Saved & Synced</span>
+                    </>
+                  ) : (
+                    <span>Save & Use Token</span>
+                  )}
+                </button>
+                {bedrockToken && (
+                  <button
+                    type="button"
+                    className="api-key-clear-btn"
+                    onClick={handleClearBedrockToken}
+                  >
+                    Clear Token
+                  </button>
+                )}
+              </div>
+
+              <div className="api-key-security-note">
+                {serverKeysConfigured["bedrock"] ? (
+                  <>
+                    <IconCheck size={14} className="note-icon" style={{ color: "#34d399" }} />
+                    <span style={{ color: "#a7f3d0" }}>
+                      Active from server environment (<span className="code-hint">AWS_BEARER_TOKEN_BEDROCK</span>). Ready for inference.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <IconAlertCircle size={13} className="note-icon" />
+                    <span>
+                      Configured in <span className="code-hint">AWS_BEARER_TOKEN_BEDROCK</span> or saved directly to your session.
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </section>

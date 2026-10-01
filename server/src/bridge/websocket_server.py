@@ -398,6 +398,9 @@ async def client_handler(websocket: ServerConnection):
                         set_provider_api_key(provider_id, api_key)
                         await broadcaster.broadcast(_build_config_dict())
 
+                elif msg_type == "get_config":
+                    await websocket.send(json.dumps(_build_config_dict()))
+
                 elif msg_type == "set_tool_calling":
                     enabled = bool(data.get("enabled", False))
                     if "max_calls" in data:
