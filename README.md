@@ -54,10 +54,17 @@ uv run python -m src.main
 
 ## Features
 
-- On-device speech-to-text with ambient-noise calibration and silence-based end-of-utterance detection
-- In-character chat with Mistral, streamed token by token
-- Low-latency TTS via Fish Audio's WebSocket API, piped to bundled mpv
-- 3D VRM character with idle motion (blink, breathing, look-at), playable `.vrma` animations, and blendable facial expressions
+- **Multi-Character Companion Support**: Interactive 3D avatars including **Akari Watanabe** and **Espeon** with idle motion (blinking, breathing, camera tracking), playable `.vrma` animations, and blendable facial expressions.
+- **Pluggable LLM Inference Providers**: Dynamic runtime switching between foundation model providers:
+  - **AWS Bedrock Mantle**: Ministral 3 (8B/14B), Mistral Large 3, Google Gemma 3, Qwen 3 VL, OpenAI GPT-OSS, OpenAI GPT-6 Luna, and OpenAI GPT-5.5.
+  - **OpenAI**: GPT-4o, GPT-4o Mini, GPT-4 Turbo.
+  - **OpenRouter (Free Tier)**: Multi-model auto router, Ling 3.0 Flash, Liquid LFM, and Space Bunny.
+  - **Free.ai Gateway**: Qwen 2.5 7B and Qwen 3 8B.
+  - **Mistral AI**: Ministral 8B, Pixtral 12B, and Mistral Small.
+- **Speech & Audio Pipeline**:
+  - On-device speech-to-text with ambient-noise calibration and silence-based end-of-utterance detection
+  - In-character chat streamed token-by-token
+  - Low-latency TTS via Fish Audio's WebSocket API, piped to bundled mpv
 
 ## License
 
