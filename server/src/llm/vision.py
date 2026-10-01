@@ -34,7 +34,41 @@ def analyze_image(image_data_uri: str) -> str:
     if not image_data_uri or not isinstance(image_data_uri, str):
         return ""
 
-    # Priority 1: Mistral Pixtral if MISTRAL_API_KEY is available
+    # Priority 1: If active provider is Bedrock, use AWS Bedrock Ministral 3 Vision
+    try:
+        from . import provider as llm_provider
+        active_prov = getattr(llm_provider, "_active_provider", "")
+    except Exception:
+        active_prov = ""
+
+    if active_prov == "bedrock":
+        try:
+            from . import bedrock_model
+            if bedrock_model.has_api_key():
+                client = bedrock_model.get_client()
+                print("[Vision] Extracting image analysis via AWS Bedrock 'mistral.ministral-3-8b-instruct'...")
+                resp = client.chat.completions.create(
+                    model="mistral.ministral-3-8b-instruct",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": VISION_PROMPT},
+                                {"type": "image_url", "image_url": {"url": image_data_uri}},
+                            ],
+                        }
+                    ],
+                    temperature=0.2,
+                    max_tokens=1000,
+                )
+                content = resp.choices[0].message.content or ""
+                if content.strip():
+                    print(f"\n[Vision] Extracted Image Context (AWS Bedrock Ministral 3):\n{'-'*60}\n{content.strip()}\n{'-'*60}\n")
+                    return content.strip()
+        except Exception as err:
+            print(f"[Vision] AWS Bedrock vision extraction error: {err}")
+
+    # Priority 2: Mistral Pixtral if MISTRAL_API_KEY is available
     mistral_key = os.getenv("MISTRAL_API_KEY")
     if mistral_key:
         try:

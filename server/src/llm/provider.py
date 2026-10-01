@@ -169,24 +169,42 @@ AVAILABLE_PROVIDERS = [
         "description": "Amazon Bedrock foundation models powered by AWS Bearer Token (Ministral, Gemma, Qwen, DeepSeek, Claude).",
         "default_model": "mistral.ministral-3-8b-instruct",
         "tool_calling_supported": True,
-        "vision_supported": False,
+        "vision_supported": True,
         "models": [
             {
                 "id": "mistral.ministral-3-8b-instruct",
                 "name": "Ministral 3 8B (Recommended)",
                 "tool_calling_supported": True,
-                "vision_supported": False,
+                "vision_supported": True,
+            },
+            {
+                "id": "mistral.ministral-3-14b-instruct",
+                "name": "Ministral 3 14B",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "mistral.mistral-large-3-675b-instruct",
+                "name": "Mistral Large 3 675B",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "qwen.qwen3-vl-235b-a22b-instruct",
+                "name": "Qwen 3 VL 235B (Vision Flagship)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
             },
             {
                 "id": "google.gemma-3-4b-it",
                 "name": "Google Gemma 3 4B (Fast)",
-                "tool_calling_supported": True,
+                "tool_calling_supported": False,
                 "vision_supported": False,
             },
             {
                 "id": "google.gemma-3-12b-it",
                 "name": "Google Gemma 3 12B",
-                "tool_calling_supported": True,
+                "tool_calling_supported": False,
                 "vision_supported": False,
             },
             {
@@ -199,18 +217,6 @@ AVAILABLE_PROVIDERS = [
                 "id": "deepseek.v3.1",
                 "name": "DeepSeek V3.1",
                 "tool_calling_supported": False,
-                "vision_supported": False,
-            },
-            {
-                "id": "mistral.ministral-3-14b-instruct",
-                "name": "Ministral 3 14B",
-                "tool_calling_supported": True,
-                "vision_supported": False,
-            },
-            {
-                "id": "mistral.mistral-large-3-675b-instruct",
-                "name": "Mistral Large 3 675B",
-                "tool_calling_supported": True,
                 "vision_supported": False,
             },
             {
@@ -228,7 +234,7 @@ AVAILABLE_PROVIDERS = [
             {
                 "id": "google.gemma-3-27b-it",
                 "name": "Google Gemma 3 27B",
-                "tool_calling_supported": True,
+                "tool_calling_supported": False,
                 "vision_supported": False,
             },
             {
@@ -334,6 +340,17 @@ def is_vision_supported(
     if target_provider == "openai":
         return True
 
+    # Bedrock models with native multimodal image vision support
+    if target_provider == "bedrock":
+        lower = (target_model or "").lower()
+        if (
+            "mistral" in lower
+            or "vl" in lower
+            or "vision" in lower
+            or "pixtral" in lower
+        ):
+            return True
+
     p_info = next((p for p in AVAILABLE_PROVIDERS if p["id"] == target_provider), None)
     if not p_info:
         return False
@@ -345,6 +362,7 @@ def is_vision_supported(
             or "pixtral" in (target_model or "").lower()
             or "gpt-4" in (target_model or "").lower()
             or "vision" in (target_model or "").lower()
+            or "vl" in (target_model or "").lower()
         )
 
     return bool(m_info.get("vision_supported", False))

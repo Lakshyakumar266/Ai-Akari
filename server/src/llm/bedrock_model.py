@@ -125,14 +125,35 @@ def _format_messages(prompt: str, history: list, image: str | None = None) -> li
 
     for item in history:
         if isinstance(item, dict):
-            messages.append({
-                "role": item.get("role", "user"),
-                "content": item.get("content", ""),
-            })
+            role = item.get("role", "user")
+            content = item.get("content", "")
         elif hasattr(item, "content"):
             class_name = item.__class__.__name__.lower()
             role = "assistant" if "assistant" in class_name else "user"
-            messages.append({"role": role, "content": item.content or ""})
+            content = item.content or ""
+        else:
+            continue
+
+        # If history content is a multimodal list (e.g. from prior turn with image_url),
+        # extract only the text so historical image payloads never poison text-only models
+        # or bloat context limits
+        if isinstance(content, list):
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict):
+                    if part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
+                    elif part.get("type") == "image_url":
+                        text_parts.append("[Attached Image]")
+                elif hasattr(part, "text") and getattr(part, "text", None):
+                    text_parts.append(getattr(part, "text"))
+                elif isinstance(part, str):
+                    text_parts.append(part)
+            content = " ".join(filter(None, text_parts)).strip() or "[Attached Image]"
+        elif not isinstance(content, str):
+            content = str(content)
+
+        messages.append({"role": role, "content": content})
 
     if image:
         user_content = []
@@ -209,8 +230,12 @@ def stream_chat(
     if "gpt-oss" in chosen_model.lower():
         stream_kwargs["max_tokens"] = 1000
 
-    # Fast path: tools disabled
-    if not tools_enabled:
+    # Models like Google Gemma on Bedrock Mantle drop tokens when tools parameter is supplied with system prompts
+    is_gemma = "gemma" in chosen_model.lower()
+    effective_tools = tools_enabled and not is_gemma
+
+    # Fast path: tools disabled or model unsupported for tools
+    if not effective_tools:
         try:
             stream = client.chat.completions.create(
                 model=chosen_model,
