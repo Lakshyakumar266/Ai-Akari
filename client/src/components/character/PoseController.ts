@@ -23,6 +23,7 @@ export class PoseController {
     // Helpers
     //
     private bone(name: VRMHumanBoneName) {
+        if (!this.vrm.humanoid) return null;
         return this.vrm.humanoid.getNormalizedBoneNode(name);
     }
 

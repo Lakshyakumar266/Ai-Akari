@@ -14,6 +14,7 @@ import {
   useCharacterControls,
   ANIMATIONS,
   EMOTIONS,
+  getCharacterConfig,
   type AnimationName,
   type EmotionName,
 } from "../character";
@@ -389,7 +390,7 @@ export const GalleryScreen: React.FC<GalleryScreenProps> = ({ character }) => {
               </div>
               <div className="gallery-meta-item">
                 <span className="gallery-meta-label">Model Target</span>
-                <span className="gallery-meta-val">{displayName} Watanabe</span>
+                <span className="gallery-meta-val">{getCharacterConfig(character).name}</span>
               </div>
               <div className="gallery-meta-item">
                 <span className="gallery-meta-label">Outfit</span>

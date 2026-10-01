@@ -29,6 +29,7 @@ import { avatarSocket } from "../networking";
 import { avatarEvents } from "../networking/EventBus";
 import { speechQueue } from "../audio/SpeechQueue";
 import { processImageFile, type ProcessedImage } from "../utils/imageUtils";
+import { getCharacterConfig } from "./character";
 import "./ChatInput.css";
 
 const MAX_ROWS = 6;
@@ -39,7 +40,12 @@ const PACKET_VOICE_CHUNK = 0x10;
 const PACKET_VOICE_END = 0x11;
 const TARGET_SAMPLE_RATE = 16000;
 
-export default function ChatInput() {
+interface ChatInputProps {
+  character?: string;
+}
+
+export default function ChatInput({ character = "akari" }: ChatInputProps) {
+  const characterConfig = getCharacterConfig(character);
   const [canSend, setCanSend] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
@@ -610,7 +616,7 @@ export default function ChatInput() {
           <textarea
             ref={textareaRef}
             className="chat-input-field"
-            placeholder={attachedImage ? "Ask Akari about this image…" : "Say something to Akari…"}
+            placeholder={attachedImage ? `Ask ${characterConfig.displayName} about this image…` : characterConfig.placeholderText}
             onInput={handleInput}
             onKeyDown={handleKeyDown}
             onKeyUp={handleKeyUp}

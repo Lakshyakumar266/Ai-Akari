@@ -61,6 +61,7 @@ def _normalize_history_for_mistral(history: list) -> list:
 import json
 import asyncio
 import threading
+import re
 from typing import Callable, Generator
 from mistralai.client.models import (
     UserMessage,
@@ -71,6 +72,71 @@ from mistralai.client.models import (
     FunctionCall,
 )
 from src.tools import tool_registry
+
+
+def _has_explicit_tool_intent(text: str) -> bool:
+    """Detects whether user prompt unambiguously asks for an action that requires tools."""
+    lowered = text.lower()
+    if (
+        "http://" in lowered
+        or "https://" in lowered
+        or "www." in lowered
+        or re.search(r"\b[a-zA-Z0-9-]+\.(?:com|org|net|io|co|app|ai|me)\b", lowered)
+    ):
+        return True
+    tool_keywords = [
+        "toolcall",
+        "tool call",
+        "use tool",
+        "call tool",
+        "call the tool",
+        "what time",
+        "current time",
+        "time now",
+        "whats time",
+        "what's time",
+        "timezone",
+        "what date",
+        "today's date",
+        "todays date",
+        "day of the week",
+        "what day",
+        "calculate",
+        "search for",
+        "google",
+        "look up",
+        "browse",
+        "website",
+    ]
+    if any(kw in lowered for kw in tool_keywords):
+        return True
+    if re.search(r"\b\d+\s*[\+\-\*\/\^]\s*\d+\b", lowered):
+        return True
+    return False
+
+
+def _is_conversational_stalling(text: str) -> bool:
+    """Detects if model generated a conversational stalling excuse instead of calling the tool."""
+    lowered = text.lower()
+    stalling_phrases = [
+        "i'll check",
+        "ill check",
+        "i will check",
+        "let me check",
+        "let me look",
+        "i'll look",
+        "ill look",
+        "i will look",
+        "checking the",
+        "wait, let me",
+        "hold on, let me",
+        "i'm gonna look",
+        "im gonna look",
+        "just gonna look",
+        "i'll check it out",
+        "ill check it out",
+    ]
+    return any(p in lowered for p in stalling_phrases)
 
 
 def stream_chat(
@@ -144,16 +210,21 @@ def stream_chat(
         return
 
     current_round = 0
+    has_explicit_intent = _has_explicit_tool_intent(prompt)
+
     while current_round < max_tool_rounds:
         current_round += 1
         if cancel_event is not None and cancel_event.is_set():
             return
+
+        tool_choice_mode = "any" if (current_round == 1 and has_explicit_intent) else "auto"
 
         try:
             stream = client.chat.stream(
                 model=active_model,
                 messages=messages,
                 tools=tools,
+                tool_choice=tool_choice_mode,
                 temperature=TOOL_TEMPERATURE,
             )
         except Exception as err:
@@ -162,7 +233,6 @@ def stream_chat(
             return
 
         tool_calls_dict: dict[str, dict] = {}
-        finish_reason = None
         round_content_chunks: list[str] = []
 
         for chunk in stream:
@@ -170,14 +240,13 @@ def stream_chat(
                 return
 
             choice = chunk.data.choices[0]
-            finish_reason = choice.finish_reason
 
             if choice.delta.tool_calls:
                 for tc in choice.delta.tool_calls:
                     tc_id = tc.id or f"tc_{len(tool_calls_dict)}"
                     if tc_id not in tool_calls_dict:
                         tool_calls_dict[tc_id] = {
-                            "id": tc.id,
+                            "id": tc.id or tc_id,
                             "name": tc.function.name if tc.function else "",
                             "arguments": (
                                 tc.function.arguments or "" if tc.function else ""
@@ -194,7 +263,49 @@ def stream_chat(
             if choice.delta.content:
                 round_content_chunks.append(choice.delta.content)
 
-        if not tool_calls_dict or finish_reason != "tool_calls":
+        # Fallback / Stalling recovery:
+        # If no tool calls were generated but model gave conversational stalling excuses
+        if not tool_calls_dict and current_round == 1:
+            full_text = "".join(round_content_chunks)
+            if _is_conversational_stalling(full_text) or has_explicit_intent:
+                print(
+                    f"[Mistral] Model generated text excuse without tool call ('{full_text[:60]}...'). Re-forcing tool execution with tool_choice='any'!"
+                )
+                try:
+                    retry_stream = client.chat.stream(
+                        model=active_model,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice="any",
+                        temperature=TOOL_TEMPERATURE,
+                    )
+                    retry_tool_calls: dict[str, dict] = {}
+                    for chunk in retry_stream:
+                        if cancel_event is not None and cancel_event.is_set():
+                            return
+                        choice = chunk.data.choices[0]
+                        if choice.delta.tool_calls:
+                            for tc in choice.delta.tool_calls:
+                                tc_id = tc.id or f"tc_{len(retry_tool_calls)}"
+                                if tc_id not in retry_tool_calls:
+                                    retry_tool_calls[tc_id] = {
+                                        "id": tc.id or tc_id,
+                                        "name": tc.function.name if tc.function else "",
+                                        "arguments": tc.function.arguments or "" if tc.function else "",
+                                    }
+                                else:
+                                    if tc.function and tc.function.name:
+                                        retry_tool_calls[tc_id]["name"] = tc.function.name
+                                    if tc.function and tc.function.arguments:
+                                        retry_tool_calls[tc_id]["arguments"] += tc.function.arguments
+
+                    if retry_tool_calls:
+                        tool_calls_dict = retry_tool_calls
+                        round_content_chunks = []
+                except Exception as retry_err:
+                    print(f"[Mistral] Tool retry error: {retry_err}")
+
+        if not tool_calls_dict:
             # Direct response or completion without tool calls
             for c in round_content_chunks:
                 yield c

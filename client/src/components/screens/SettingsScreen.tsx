@@ -24,6 +24,7 @@ import { avatarEvents, avatarSocket } from "../../networking";
 import "./SettingsScreen.css";
 
 interface SettingsScreenProps {
+  currentCharacter?: string;
   currentProvider: string;
   currentModel: string;
   currentToolsEnabled?: boolean;
@@ -212,6 +213,7 @@ const PROVIDERS: ProviderDetail[] = [
 ];
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  currentCharacter = "akari",
   currentProvider,
   currentModel,
   currentToolsEnabled = false,
@@ -340,8 +342,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const currentUrlPreview =
     typeof window !== "undefined"
-      ? `${window.location.origin}/?screen=settings&character=akari&model=${model}`
-      : `/?screen=settings&character=akari&model=${model}`;
+      ? `${window.location.origin}/?screen=settings&character=${encodeURIComponent(currentCharacter)}&model=${model}`
+      : `/?screen=settings&character=${encodeURIComponent(currentCharacter)}&model=${model}`;
 
   const copyUrl = () => {
     if (navigator?.clipboard) {
@@ -870,7 +872,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <div className="sync-bar-left">
               <span className="sync-live-dot" />
               <code className="sync-url-text">
-                {`?screen=settings&character=akari&model=${model}`}
+                {`?screen=settings&character=${currentCharacter}&model=${model}`}
               </code>
             </div>
 

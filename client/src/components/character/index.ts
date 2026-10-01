@@ -5,8 +5,16 @@ export type {
   AnimationControlOption,
   EmotionName,
   VisemeName,
+  CharacterDefinition,
 } from "./types";
-export { ANIMATIONS, EMOTIONS } from "./types";
+export {
+  ANIMATIONS,
+  EMOTIONS,
+  CHARACTERS,
+  CHARACTER_LIST,
+  DEFAULT_CHARACTER_ID,
+  getCharacterConfig,
+} from "./types";
 export {
   useCharacterControls,
   characterControlsStore,

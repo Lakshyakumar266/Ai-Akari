@@ -19,12 +19,42 @@ import {
 } from "./AvatarContext";
 
 import {
-  DEFAULT_VRM_URL,
+  getCharacterConfig,
   type AnimationName,
   type EmotionName,
 } from "./types";
 
-export default function Character() {
+interface CharacterProps {
+  characterId?: string;
+}
+
+function disposeAvatar(vrm: any, mixer?: THREE.AnimationMixer) {
+  try {
+    if (mixer) {
+      mixer.stopAllAction();
+      if (vrm?.scene) {
+        mixer.uncacheRoot(vrm.scene);
+      }
+    }
+    const root = vrm?.scene || vrm;
+    root?.traverse?.((obj: any) => {
+      if (obj.geometry) {
+        obj.geometry.dispose();
+      }
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((m: any) => m?.dispose?.());
+        } else {
+          obj.material?.dispose?.();
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("Avatar cleanup warning:", err);
+  }
+}
+
+export default function Character({ characterId = "akari" }: CharacterProps) {
   const [avatar, setAvatar] =
     useState<AvatarContextValue | null>(null);
 
@@ -34,69 +64,88 @@ export default function Character() {
     new THREE.Vector3()
   );
 
+  const characterConfig = getCharacterConfig(characterId);
+  const vrmUrl = characterConfig.vrmUrl;
+  const position = characterConfig.position ?? [0, 0, 0];
+  const scale = characterConfig.scale ?? 1;
+
   //
-  // Load Avatar
+  // Load Avatar when character changes
   //
 
   useEffect(() => {
     let cancelled = false;
+    let loadedAvatar: AvatarContextValue | null = null;
 
     async function init() {
-      const { vrm, mixer } =
-        await loadAvatar(DEFAULT_VRM_URL);
+      try {
+        const { vrm, mixer } = await loadAvatar(vrmUrl);
 
-      if (cancelled) return;
+        if (cancelled) {
+          disposeAvatar(vrm, mixer);
+          return;
+        }
 
-      //
-      // Default Pose
-      //
+        // Keep vrm.scene normalized; outer <group position={position} scale={scale}> handles positioning and scaling
+        vrm.scene.position.set(0, 0, 0);
+        vrm.scene.scale.set(1, 1, 1);
 
-      const pose = new PoseController(vrm);
+        //
+        // Default Pose
+        //
+        const poseCtrl = new PoseController(vrm);
+        try {
+          poseCtrl.relaxed();
+        } catch {
+          // ignore initial pose issue if model bones vary
+        }
 
-      pose.relaxed();
-
-      //
-      // Controllers
-      //
-
-      const controllers = {
-        pose,
-
-        animation:
-          new AnimationController(
+        //
+        // Controllers
+        //
+        const controllers = {
+          pose: poseCtrl,
+          animation: new AnimationController(
             vrm,
             mixer,
-            pose
+            poseCtrl
           ),
+          blink: new BlinkController(),
+          breathing: new BreathingController(),
+          lookAt: new LookAtController(),
+          lipSync: new LipSyncController(),
+          emotion: new EmotionController(),
+        };
 
-        blink: new BlinkController(),
+        loadedAvatar = {
+          vrm,
+          mixer,
+          controllers,
+        };
 
-        breathing:
-          new BreathingController(),
-
-        lookAt:
-          new LookAtController(),
-
-        lipSync:
-          new LipSyncController(),
-
-        emotion:
-          new EmotionController(),
-      };
-
-      setAvatar({
-        vrm,
-        mixer,
-        controllers,
-      });
+        setAvatar(loadedAvatar);
+      } catch (err) {
+        console.error(`Failed to load avatar for ${characterId} from ${vrmUrl}:`, err);
+      }
     }
 
     init();
 
     return () => {
       cancelled = true;
+      if (loadedAvatar) {
+        try {
+          loadedAvatar.controllers.lipSync.dispose();
+          loadedAvatar.controllers.emotion.dispose();
+          loadedAvatar.controllers.animation.dispose();
+          disposeAvatar(loadedAvatar.vrm, loadedAvatar.mixer);
+        } catch (e) {
+          console.warn("Error cleaning up previous avatar:", e);
+        }
+      }
+      setAvatar(null);
     };
-  }, []);
+  }, [vrmUrl, characterId]);
 
   //
   // Emotion
@@ -160,7 +209,7 @@ export default function Character() {
       vrm
     );
 
-    controllers.lipSync.update(delta,vrm);
+    controllers.lipSync.update(delta, vrm);
 
     //
     // Idle
@@ -210,9 +259,11 @@ export default function Character() {
     <AvatarContext.Provider
       value={avatar}
     >
-      <primitive
-        object={avatar.vrm.scene}
-      />
+      <group position={position} scale={[scale, scale, scale]}>
+        <primitive
+          object={avatar.vrm.scene}
+        />
+      </group>
     </AvatarContext.Provider>
   );
 }

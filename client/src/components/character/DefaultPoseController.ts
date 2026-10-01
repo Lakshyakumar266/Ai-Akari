@@ -3,6 +3,8 @@ import { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
 
 export class DefaultPoseController {
   apply(vrm: VRM) {
+    if (!vrm.humanoid) return;
+
     const leftUpperArm = vrm.humanoid.getNormalizedBoneNode(
       VRMHumanBoneName.LeftUpperArm
     );

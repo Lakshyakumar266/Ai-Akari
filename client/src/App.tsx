@@ -120,7 +120,7 @@ function AppContent() {
             }}
           >
             <CameraRig isFramed={isFramed} />
-            <Scene />
+            <Scene character={character} />
 
             <OrbitControls
               makeDefault
@@ -138,6 +138,7 @@ function AppContent() {
         {screen === "characters" && (
           <OverviewScreen
             character={character}
+            onSelectCharacter={(newChar) => navigate("characters", newChar)}
             onStartChat={() => navigate("chat", character)}
             onOpenSettings={() => navigate("settings", character)}
           />
@@ -164,6 +165,7 @@ function AppContent() {
 
         {screen === "settings" && (
           <SettingsScreen
+            currentCharacter={character}
             currentProvider={provider}
             currentModel={model}
             currentToolsEnabled={tools}

@@ -23,7 +23,7 @@ export const DEFAULT_POSE: CharacterPose = {
 };
 
 const DEFAULT_STATE: CharacterControlsState = {
-  animation: "None",
+  animation: "Idle",
   emotion: "Neutral",
   pose: { ...DEFAULT_POSE },
 };
@@ -91,7 +91,7 @@ class CharacterControlsStore {
 
   resetAll() {
     this.state = {
-      animation: "None",
+      animation: "Idle",
       emotion: "Neutral",
       pose: { ...DEFAULT_POSE },
     };

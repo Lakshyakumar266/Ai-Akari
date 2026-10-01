@@ -5,23 +5,26 @@ import {
   IconPlus,
   IconCamera,
 } from "@tabler/icons-react";
+import { CHARACTER_LIST, getCharacterConfig } from "../character";
 import "./OverviewScreen.css";
 
 interface OverviewScreenProps {
   character: string;
   onStartChat: () => void;
   onOpenSettings?: () => void;
+  onSelectCharacter?: (characterId: string) => void;
 }
 
 export const OverviewScreen: React.FC<OverviewScreenProps> = ({
   character,
   onStartChat,
   onOpenSettings,
+  onSelectCharacter,
 }) => {
   const [activeTab, setActiveTab] = useState<"overview" | "voice">("overview");
   const [voiceEngine, setVoiceEngine] = useState<"fish" | "sovits">("fish");
 
-  const displayName = character.charAt(0).toUpperCase() + character.slice(1);
+  const config = getCharacterConfig(character);
 
   return (
     <div className="overview-screen-root" aria-label="Character Overview Screen">
@@ -29,11 +32,11 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
       <aside className="overview-info-panel" aria-label="Character Details">
         <div className="panel-header-section">
           <div className="panel-category-tag">
-            <span>CHARACTERS</span>
-            <span>01</span>
+            <span>{config.categoryTag}</span>
+            <span>{config.tagNumber}</span>
           </div>
-          <h1 className="panel-character-name">{displayName}</h1>
-          <div className="panel-character-subtitle">Tsundere · Lively</div>
+          <h1 className="panel-character-name">{config.name}</h1>
+          <div className="panel-character-subtitle">{config.subtitle}</div>
         </div>
 
         <div className="panel-action-row">
@@ -49,7 +52,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           <button
             type="button"
             className="panel-icon-btn"
-            title="Delete character"
+            title="Take snapshot"
             onClick={() => { }}
           >
             <IconCamera size={16} stroke={1.8} />
@@ -78,6 +81,17 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           </button>
         </div>
 
+        {/* Overview tab description */}
+        {activeTab === "overview" && (
+          <div className="panel-overview-desc-box">
+            <p className="panel-character-desc">{config.description}</p>
+            <div className="panel-character-pills">
+              <span className="panel-pill">{config.role}</span>
+              <span className="panel-pill">Active VRM</span>
+            </div>
+          </div>
+        )}
+
         {/* Personality & model link -> takes user to Settings page */}
         <div
           className="panel-nav-row"
@@ -90,7 +104,6 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           <span>Personality & model</span>
           <IconArrowRight size={14} stroke={2} />
         </div>
-
 
         {/* Voice engine configuration (Voice Tab) */}
         {activeTab === "voice" && (
@@ -119,7 +132,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
 
             <p className="panel-voice-caption">
               {voiceEngine === "fish"
-                ? "Fish Audio: Voice synthesized via Fish Audio pipeline."
+                ? "Fish Audio: High-speed real-time synthetic voice stream."
                 : "GPT-SoVITS: Voice reference model synthesized locally."}
             </p>
           </div>
@@ -131,7 +144,7 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
           className="panel-start-chat-btn"
           onClick={onStartChat}
         >
-          <span>Start chat</span>
+          <span>Start chat with {config.displayName}</span>
           <IconArrowRight size={16} stroke={2.5} />
         </button>
       </aside>
@@ -139,16 +152,30 @@ export const OverviewScreen: React.FC<OverviewScreenProps> = ({
       {/* ─── Bottom Character Selector Row ─────────────────────────────────── */}
       <div className="overview-bottom-selector" aria-label="Character Selector">
         <div className="selector-cards-row">
-          <div className="selector-card-wrapper">
-            <div className="selector-card selected">
-              <img
-                src="/akari_avatar.jpg"
-                alt="Akari Watanabe"
-                className="selector-card-img"
-              />
-            </div>
-            <span className="selector-card-name">{displayName}</span>
-          </div>
+          {CHARACTER_LIST.map((charItem) => {
+            const isSelected = character.toLowerCase() === charItem.id.toLowerCase();
+            return (
+              <div
+                key={charItem.id}
+                className="selector-card-wrapper"
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectCharacter?.(charItem.id)}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelectCharacter?.(charItem.id)}
+                title={`Select ${charItem.name}`}
+                aria-pressed={isSelected}
+              >
+                <div className={`selector-card ${isSelected ? "selected" : ""}`}>
+                  <img
+                    src={charItem.avatarUrl}
+                    alt={charItem.name}
+                    className="selector-card-img"
+                  />
+                </div>
+                <span className="selector-card-name">{charItem.displayName}</span>
+              </div>
+            );
+          })}
         </div>
 
         <button

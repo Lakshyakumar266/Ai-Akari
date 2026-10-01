@@ -7,11 +7,11 @@ interface ChatScreenProps {
   onBackToOverview: () => void;
 }
 
-export const ChatScreen: React.FC<ChatScreenProps> = () => {
+export const ChatScreen: React.FC<ChatScreenProps> = ({ character }) => {
   return (
     <div className="chat-screen-root" aria-label="Interactive Chat Screen">
       {/* Persistent floating glassmorphic input bar */}
-      <ChatInput />
+      <ChatInput character={character} />
     </div>
   );
 };

@@ -8,7 +8,11 @@ import {
 } from "@react-three/postprocessing";
 import { useTheme } from "../navigation/ThemeContext";
 
-export default function Scene() {
+interface SceneProps {
+    character?: string;
+}
+
+export default function Scene({ character = "akari" }: SceneProps) {
     const { theme } = useTheme();
     const isDark = theme === "dark";
     const bgColor = isDark ? "#1A1C1C" : "#F5F5F3";
@@ -47,7 +51,7 @@ export default function Scene() {
                 intensity={isDark ? 0.45 : 0.35}
             />
 
-            <Character />
+            <Character characterId={character} />
 
             <EffectComposer>
                 <Bloom
