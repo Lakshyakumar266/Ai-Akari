@@ -49,10 +49,29 @@ def _normalize_history_for_mistral(history: list) -> list:
         if isinstance(item, dict):
             role = item.get("role", "user")
             content = item.get("content", "")
+            if isinstance(content, list):
+                text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                content = " ".join(filter(None, text_parts)).strip() or "[Image attached]"
             if role == "assistant":
                 normalized.append(AssistantMessage(content=content))
             else:
                 normalized.append(UserMessage(content=content))
+        elif hasattr(item, "content"):
+            content = item.content
+            if isinstance(content, list):
+                text_parts = []
+                for p in content:
+                    if isinstance(p, dict) and p.get("type") == "text":
+                        text_parts.append(p.get("text", ""))
+                    elif hasattr(p, "text") and getattr(p, "text", None):
+                        text_parts.append(getattr(p, "text"))
+                clean_text = " ".join(filter(None, text_parts)).strip() or "[Image attached]"
+                if "assistant" in item.__class__.__name__.lower():
+                    normalized.append(AssistantMessage(content=clean_text))
+                else:
+                    normalized.append(UserMessage(content=clean_text))
+            else:
+                normalized.append(item)
         else:
             normalized.append(item)
     return normalized

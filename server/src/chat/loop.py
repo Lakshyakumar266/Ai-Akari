@@ -186,10 +186,16 @@ async def process_chat_message(
                     return
 
                 if not started_printing:
-                    print("[Chat] Akari: ", end="", flush=True)
+                    try:
+                        print("[Chat] Akari: ", end="", flush=True)
+                    except Exception:
+                        pass
                     started_printing = True
 
-                print(token, end="", flush=True)
+                try:
+                    print(token, end="", flush=True)
+                except Exception:
+                    pass
                 full_reply.append(token)
                 buffer += token
 
@@ -313,17 +319,12 @@ async def process_chat_message(
             raw_reply = "".join(full_reply)
             clean_reply = strip_all_emotion_tags(raw_reply).strip()
             if clean_reply:
+                # Store text context in conversation history rather than giant base64 image data URIs
+                # so subsequent turns do not bloat context or crash text-only models
+                history_text = user_text
                 if image:
-                    _history.append(
-                        UserMessage(
-                            content=[
-                                {"type": "text", "text": user_text},
-                                {"type": "image_url", "image_url": {"url": image}},
-                            ]
-                        )
-                    )
-                else:
-                    _history.append(UserMessage(content=user_text))
+                    history_text = f"[Image attached] {user_text}".strip() if user_text else "[Image attached]"
+                _history.append(UserMessage(content=history_text))
                 _history.append(AssistantMessage(content=clean_reply))
                 if should_compact(_history):
                     _history = await compact_conversation_async(_history)
