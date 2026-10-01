@@ -1,12 +1,20 @@
-export { default } from "./Character";
-export { useAvatar } from "./AvatarContext";
 export type {
   AnimationName,
   AnimationControlOption,
   EmotionName,
   VisemeName,
+  CharacterDefinition,
 } from "./types";
-export { ANIMATIONS, EMOTIONS } from "./types";
+
+export {
+  ANIMATIONS,
+  EMOTIONS,
+  CHARACTERS,
+  CHARACTER_LIST,
+  DEFAULT_CHARACTER_ID,
+  getCharacterConfig,
+} from "./types";
+
 export {
   useCharacterControls,
   characterControlsStore,
@@ -14,3 +22,11 @@ export {
   type CharacterPose,
   type CharacterControlsState,
 } from "./characterControlsStore";
+
+export { useAvatar } from "./AvatarContext";
+export { default } from "./Character";
+
+/**
+ * Character Component System
+ * Bundles 3D VRM model rendering, animations, facial expressions, and reactive procedural controls.
+ */

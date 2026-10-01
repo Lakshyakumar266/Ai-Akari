@@ -1,50 +1,41 @@
-import * as THREE from "three";
+import { MathUtils } from "three";
 import { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
 
+const { degToRad } = MathUtils;
+
 export class DefaultPoseController {
-  apply(vrm: VRM) {
-    const leftUpperArm = vrm.humanoid.getNormalizedBoneNode(
-      VRMHumanBoneName.LeftUpperArm
-    );
+  apply(vrm: VRM): void {
+    const humanoid = vrm.humanoid;
+    if (!humanoid) return;
 
-    const rightUpperArm = vrm.humanoid.getNormalizedBoneNode(
-      VRMHumanBoneName.RightUpperArm
-    );
+    const leftUpperArm = humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm);
+    const rightUpperArm = humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
+    const leftLowerArm = humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftLowerArm);
+    const rightLowerArm = humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm);
 
-    const leftLowerArm = vrm.humanoid.getNormalizedBoneNode(
-      VRMHumanBoneName.LeftLowerArm
-    );
-
-    const rightLowerArm = vrm.humanoid.getNormalizedBoneNode(
-      VRMHumanBoneName.RightLowerArm
-    );
-
-    //
-    // Relax shoulders
-    //
+    // Natural shoulder and arm drape
     if (leftUpperArm) {
-      leftUpperArm.rotation.z = THREE.MathUtils.degToRad(18);
-      leftUpperArm.rotation.x = THREE.MathUtils.degToRad(4);
-      leftUpperArm.rotation.y = THREE.MathUtils.degToRad(-4);
+      leftUpperArm.rotation.set(degToRad(4), degToRad(-4), degToRad(18));
     }
 
     if (rightUpperArm) {
-      rightUpperArm.rotation.z = THREE.MathUtils.degToRad(-18);
-      rightUpperArm.rotation.x = THREE.MathUtils.degToRad(4);
-      rightUpperArm.rotation.y = THREE.MathUtils.degToRad(4);
+      rightUpperArm.rotation.set(degToRad(4), degToRad(4), degToRad(-18));
     }
 
-    //
-    // Slight elbow bend
-    //
+    // Subtle natural elbow bend
     if (leftLowerArm) {
-      leftLowerArm.rotation.z = THREE.MathUtils.degToRad(6);
+      leftLowerArm.rotation.z = degToRad(6);
     }
 
     if (rightLowerArm) {
-      rightLowerArm.rotation.z = THREE.MathUtils.degToRad(-6);
+      rightLowerArm.rotation.z = degToRad(-6);
     }
 
     vrm.update(0);
   }
 }
+
+/**
+ * Default Pose Controller
+ * Imposes a natural anatomical rest pose with slightly bent elbows and relaxed shoulders.
+ */

@@ -1,194 +1,125 @@
-import * as THREE from "three";
-import {
-    VRM,
-    VRMHumanBoneName,
-} from "@pixiv/three-vrm";
+import { MathUtils } from "three";
+import { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
+
+const { degToRad } = MathUtils;
 
 export type PoseName =
-    | "relaxed"
-    | "attention"
-    | "crossedArms"
-    | "handsBehindBack";
+  | "relaxed"
+  | "attention"
+  | "crossedArms"
+  | "handsBehindBack";
 
-
+const ARM_BONES: readonly VRMHumanBoneName[] = [
+  VRMHumanBoneName.LeftUpperArm,
+  VRMHumanBoneName.RightUpperArm,
+  VRMHumanBoneName.LeftLowerArm,
+  VRMHumanBoneName.RightLowerArm,
+  VRMHumanBoneName.LeftHand,
+  VRMHumanBoneName.RightHand,
+];
 
 export class PoseController {
-    private readonly vrm: VRM;
+  private readonly vrm: VRM;
 
-    constructor(vrm: VRM) {
-        this.vrm = vrm;
-    }
+  constructor(vrm: VRM) {
+    this.vrm = vrm;
+  }
 
-    //
-    // Helpers
-    //
-    private bone(name: VRMHumanBoneName) {
-        return this.vrm.humanoid.getNormalizedBoneNode(name);
-    }
+  private bone(name: VRMHumanBoneName) {
+    return this.vrm.humanoid?.getNormalizedBoneNode(name) ?? null;
+  }
 
-    private clearArms() {
-        const bones = [
-            VRMHumanBoneName.LeftUpperArm,
-            VRMHumanBoneName.RightUpperArm,
-            VRMHumanBoneName.LeftLowerArm,
-            VRMHumanBoneName.RightLowerArm,
-            VRMHumanBoneName.LeftHand,
-            VRMHumanBoneName.RightHand,
-        ];
-
-        for (const boneName of bones) {
-            const bone = this.bone(boneName);
-
-            if (!bone) continue;
-
-            bone.rotation.set(0, 0, 0);
-        }
-
-        this.vrm.update(0);
-    }
-
-    //
-    // Called before a VRMA starts.
-    // Leaves the avatar in a clean state.
-    //
-    clear() {
-        this.clearArms();
-    }
-
-    //
-    // Natural standing pose.
-    //
-    relaxed(
-        armX = 5,
-        armY = 8,
-        armZ = 72
-      ) {
-        this.clearArms();
-      
-        const leftUpper = this.bone(
-          VRMHumanBoneName.LeftUpperArm
-        );
-      
-        const rightUpper = this.bone(
-          VRMHumanBoneName.RightUpperArm
-        );
-      
-        if (leftUpper) {
-          leftUpper.rotation.set(
-            THREE.MathUtils.degToRad(armX),
-            THREE.MathUtils.degToRad(-armY),
-            THREE.MathUtils.degToRad(armZ)
-          );
-        }
-      
-        if (rightUpper) {
-          rightUpper.rotation.set(
-            THREE.MathUtils.degToRad(armX),
-            THREE.MathUtils.degToRad(armY),
-            THREE.MathUtils.degToRad(-armZ)
-          );
-        }
-      
-        this.vrm.update(0);
+  private clearArms(): void {
+    for (const boneName of ARM_BONES) {
+      const boneNode = this.bone(boneName);
+      if (boneNode) {
+        boneNode.rotation.set(0, 0, 0);
       }
-    //
-    // Standing straight.
-    //
-    attention() {
-        this.clearArms();
+    }
+    this.vrm.update(0);
+  }
 
-        const chest = this.bone(
-            VRMHumanBoneName.Chest
-        );
+  clear(): void {
+    this.clearArms();
+  }
 
-        if (chest) {
-            chest.rotation.x =
-                THREE.MathUtils.degToRad(-4);
-        }
+  relaxed(armX = 5, armY = 8, armZ = 72): void {
+    this.clearArms();
 
-        this.vrm.update(0);
+    const leftUpper = this.bone(VRMHumanBoneName.LeftUpperArm);
+    const rightUpper = this.bone(VRMHumanBoneName.RightUpperArm);
+
+    if (leftUpper) {
+      leftUpper.rotation.set(degToRad(armX), degToRad(-armY), degToRad(armZ));
     }
 
-    //
-    // Placeholder.
-    //
-    crossedArms() {
-        this.clearArms();
-
-        const leftUpper = this.bone(
-            VRMHumanBoneName.LeftUpperArm
-        );
-
-        const rightUpper = this.bone(
-            VRMHumanBoneName.RightUpperArm
-        );
-
-        if (leftUpper) {
-            leftUpper.rotation.z =
-                THREE.MathUtils.degToRad(50);
-
-            leftUpper.rotation.y =
-                THREE.MathUtils.degToRad(30);
-        }
-
-        if (rightUpper) {
-            rightUpper.rotation.z =
-                THREE.MathUtils.degToRad(-50);
-
-            rightUpper.rotation.y =
-                THREE.MathUtils.degToRad(-30);
-        }
-
-        this.vrm.update(0);
+    if (rightUpper) {
+      rightUpper.rotation.set(degToRad(armX), degToRad(armY), degToRad(-armZ));
     }
 
-    //
-    // Placeholder.
-    //
-    handsBehindBack() {
-        this.clearArms();
+    this.vrm.update(0);
+  }
 
-        const leftUpper = this.bone(
-            VRMHumanBoneName.LeftUpperArm
-        );
+  attention(): void {
+    this.clearArms();
 
-        const rightUpper = this.bone(
-            VRMHumanBoneName.RightUpperArm
-        );
-
-        if (leftUpper) {
-            leftUpper.rotation.x =
-                THREE.MathUtils.degToRad(-28);
-        }
-
-        if (rightUpper) {
-            rightUpper.rotation.x =
-                THREE.MathUtils.degToRad(-28);
-        }
-
-        this.vrm.update(0);
+    const chest = this.bone(VRMHumanBoneName.Chest);
+    if (chest) {
+      chest.rotation.x = degToRad(-4);
     }
 
-    //
-    // Convenience API
-    //
-    setPose(name: PoseName) {
-        switch (name) {
-            case "relaxed":
-                this.relaxed();
-                break;
+    this.vrm.update(0);
+  }
 
-            case "attention":
-                this.attention();
-                break;
+  crossedArms(): void {
+    this.clearArms();
 
-            case "crossedArms":
-                this.crossedArms();
-                break;
+    const leftUpper = this.bone(VRMHumanBoneName.LeftUpperArm);
+    const rightUpper = this.bone(VRMHumanBoneName.RightUpperArm);
 
-            case "handsBehindBack":
-                this.handsBehindBack();
-                break;
-        }
+    if (leftUpper) {
+      leftUpper.rotation.set(0, degToRad(30), degToRad(50));
     }
+
+    if (rightUpper) {
+      rightUpper.rotation.set(0, degToRad(-30), degToRad(-50));
+    }
+
+    this.vrm.update(0);
+  }
+
+  handsBehindBack(): void {
+    this.clearArms();
+
+    const leftUpper = this.bone(VRMHumanBoneName.LeftUpperArm);
+    const rightUpper = this.bone(VRMHumanBoneName.RightUpperArm);
+
+    if (leftUpper) {
+      leftUpper.rotation.x = degToRad(-28);
+    }
+
+    if (rightUpper) {
+      rightUpper.rotation.x = degToRad(-28);
+    }
+
+    this.vrm.update(0);
+  }
+
+  setPose(name: PoseName): void {
+    switch (name) {
+      case "relaxed":
+        return this.relaxed();
+      case "attention":
+        return this.attention();
+      case "crossedArms":
+        return this.crossedArms();
+      case "handsBehindBack":
+        return this.handsBehindBack();
+    }
+  }
 }
+
+/**
+ * Skeletal Pose Controller
+ * Manages static arm, shoulder, and torso orientations across predefined postural stances.
+ */

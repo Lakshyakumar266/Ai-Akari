@@ -28,5 +28,5 @@ TOOL_EXECUTION_TIMEOUT = float(os.getenv("TOOL_EXECUTION_TIMEOUT", "20.0"))
 # LLM Temperature Configuration:
 # - CHAT_TEMPERATURE: Used for natural conversational text generation (prevents hallucinations while keeping personality lively)
 # - TOOL_TEMPERATURE: Used during tool-calling decisions (ensures deterministic, precise tool calls without hallucinating)
-CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.7"))
-TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.2"))
+CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.8"))
+TOOL_TEMPERATURE = float(os.getenv("TOOL_TEMPERATURE", "0.5"))

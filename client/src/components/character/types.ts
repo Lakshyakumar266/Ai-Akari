@@ -39,4 +39,64 @@ export const VISEME_EXPRESSIONS = [
 
 export type VisemeName = (typeof VISEME_EXPRESSIONS)[number];
 
-export const DEFAULT_VRM_URL = "/character.vrm";
+export interface CharacterDefinition {
+  id: string;
+  name: string;
+  displayName: string;
+  subtitle: string;
+  categoryTag: string;
+  tagNumber: string;
+  role: string;
+  description: string;
+  vrmUrl: string;
+  avatarUrl: string;
+  voiceEngine: "fish" | "sovits";
+  placeholderText: string;
+  position?: [number, number, number];
+  scale?: number;
+}
+
+export const CHARACTERS: Record<string, CharacterDefinition> = {
+  akari: {
+    id: "akari",
+    name: "Akari Watanabe",
+    displayName: "Akari",
+    subtitle: "Tsundere · Lively",
+    categoryTag: "CHARACTERS",
+    tagNumber: "01",
+    role: "Anime Companion",
+    description: "Third-year high school student and stylish, lively gyaru from 'More Than a Married Couple, But Not Lovers'. Vibrant, spirited, with a secret caring side.",
+    vrmUrl: "/characters/default.vrm",
+    avatarUrl: "/akari_avatar.jpg",
+    voiceEngine: "fish",
+    placeholderText: "Say something to Akari…",
+    position: [0, 0, 0],
+    scale: 1,
+  },
+  espeon: {
+    id: "espeon",
+    name: "Espeon",
+    displayName: "Espeon",
+    subtitle: "Psychic · Elegant",
+    categoryTag: "CHARACTERS",
+    tagNumber: "02",
+    role: "Psychic Companion",
+    description: "The Sun Pokémon. Calm, loyal, and perceptive, sensing air currents and thoughts with psychic awareness to protect and companion.",
+    vrmUrl: "/characters/Espeon.vrm",
+    avatarUrl: "/espeon_avatar.jpg",
+    voiceEngine: "fish",
+    placeholderText: "Say something to Espeon…",
+    position: [0, 0.07, -0.10],
+    scale: 0.9,
+  },
+};
+
+export const CHARACTER_LIST: CharacterDefinition[] = Object.values(CHARACTERS);
+export const DEFAULT_CHARACTER_ID = "akari";
+export const DEFAULT_VRM_URL = CHARACTERS.akari.vrmUrl;
+
+export function getCharacterConfig(characterId?: string): CharacterDefinition {
+  if (!characterId) return CHARACTERS[DEFAULT_CHARACTER_ID];
+  const normalized = characterId.toLowerCase().trim();
+  return CHARACTERS[normalized] || CHARACTERS[DEFAULT_CHARACTER_ID];
+}

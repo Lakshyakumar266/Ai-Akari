@@ -2,16 +2,20 @@ import React from "react";
 import ChatInput from "../ChatInput";
 import "./ChatScreen.css";
 
-interface ChatScreenProps {
+export interface ChatScreenProps {
   character: string;
-  onBackToOverview: () => void;
+  onBackToOverview?: () => void;
 }
 
-export const ChatScreen: React.FC<ChatScreenProps> = () => {
+export const ChatScreen: React.FC<ChatScreenProps> = ({ character }) => {
   return (
     <div className="chat-screen-root" aria-label="Interactive Chat Screen">
-      {/* Persistent floating glassmorphic input bar */}
-      <ChatInput />
+      <ChatInput character={character} />
     </div>
   );
 };
+
+/**
+ * Chat Screen Viewport
+ * Hosts the primary interactive conversation surface and floating glassmorphic input controls.
+ */

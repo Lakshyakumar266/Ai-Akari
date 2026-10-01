@@ -23,45 +23,43 @@ export const DEFAULT_POSE: CharacterPose = {
 };
 
 const DEFAULT_STATE: CharacterControlsState = {
-  animation: "None",
+  animation: "Idle",
   emotion: "Neutral",
   pose: { ...DEFAULT_POSE },
 };
 
-type Listener = () => void;
+type StoreListener = () => void;
 
 class CharacterControlsStore {
   private state: CharacterControlsState = { ...DEFAULT_STATE };
-  private listeners: Set<Listener> = new Set();
+  private readonly listeners: Set<StoreListener> = new Set();
 
-  getState = (): CharacterControlsState => {
-    return this.state;
-  };
+  getState = (): CharacterControlsState => this.state;
 
-  subscribe = (listener: Listener): (() => void) => {
+  subscribe = (listener: StoreListener): (() => void) => {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
   };
 
-  private notify() {
-    this.listeners.forEach((l) => l());
+  private notify(): void {
+    this.listeners.forEach((listener) => listener());
   }
 
-  setAnimation(animation: AnimationControlOption) {
+  setAnimation(animation: AnimationControlOption): void {
     if (this.state.animation === animation) return;
     this.state = { ...this.state, animation };
     this.notify();
   }
 
-  setEmotion(emotion: EmotionName) {
+  setEmotion(emotion: EmotionName): void {
     if (this.state.emotion === emotion) return;
     this.state = { ...this.state, emotion };
     this.notify();
   }
 
-  setPose(poseUpdate: Partial<CharacterPose>) {
+  setPose(poseUpdate: Partial<CharacterPose>): void {
     this.state = {
       ...this.state,
       pose: { ...this.state.pose, ...poseUpdate },
@@ -69,19 +67,19 @@ class CharacterControlsStore {
     this.notify();
   }
 
-  setArmX(val: number) {
+  setArmX(val: number): void {
     this.setPose({ armX: val });
   }
 
-  setArmY(val: number) {
+  setArmY(val: number): void {
     this.setPose({ armY: val });
   }
 
-  setArmZ(val: number) {
+  setArmZ(val: number): void {
     this.setPose({ armZ: val });
   }
 
-  resetPose() {
+  resetPose(): void {
     this.state = {
       ...this.state,
       pose: { ...DEFAULT_POSE },
@@ -89,9 +87,9 @@ class CharacterControlsStore {
     this.notify();
   }
 
-  resetAll() {
+  resetAll(): void {
     this.state = {
-      animation: "None",
+      animation: "Idle",
       emotion: "Neutral",
       pose: { ...DEFAULT_POSE },
     };
@@ -102,19 +100,17 @@ class CharacterControlsStore {
 export const characterControlsStore = new CharacterControlsStore();
 
 export function useCharacterControls() {
-  const state = useSyncExternalStore(
+  const currentState = useSyncExternalStore(
     characterControlsStore.subscribe,
     characterControlsStore.getState,
     characterControlsStore.getState
   );
 
   return {
-    ...state,
-    setAnimation: (anim: AnimationControlOption) =>
-      characterControlsStore.setAnimation(anim),
+    ...currentState,
+    setAnimation: (anim: AnimationControlOption) => characterControlsStore.setAnimation(anim),
     setEmotion: (emo: EmotionName) => characterControlsStore.setEmotion(emo),
-    setPose: (pose: Partial<CharacterPose>) =>
-      characterControlsStore.setPose(pose),
+    setPose: (pose: Partial<CharacterPose>) => characterControlsStore.setPose(pose),
     setArmX: (val: number) => characterControlsStore.setArmX(val),
     setArmY: (val: number) => characterControlsStore.setArmY(val),
     setArmZ: (val: number) => characterControlsStore.setArmZ(val),
@@ -122,3 +118,8 @@ export function useCharacterControls() {
     resetAll: () => characterControlsStore.resetAll(),
   };
 }
+
+/**
+ * Character Controls Store
+ * React external store managing active body animations, manual bone rotations, and facial sentiments.
+ */
