@@ -171,6 +171,25 @@ def _format_messages(prompt: str, history: list, image: str | None = None) -> li
     return messages
 
 
+def _format_bedrock_error(chosen_model: str, err: Exception) -> str:
+    """Formats Bedrock errors with helpful context about region and model availability."""
+    err_str = str(err)
+    reg = get_region()
+    if "404" in err_str or "not_found" in err_str:
+        return (
+            f"[Bedrock Notice: Model '{chosen_model}' returned 404 Not Found on Amazon Bedrock Mantle. "
+            f"AWS has this model in preview/catalog, but its runtime chat endpoint is not activated yet in region '{reg}'. "
+            f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
+        )
+    if "401" in err_str or "access_denied" in err_str or "permission_denied" in err_str:
+        return (
+            f"[Bedrock Notice: Access to model '{chosen_model}' was denied by Amazon Bedrock for this account. "
+            f"This model requires specialized entitlement or access agreement in region '{reg}'. "
+            f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
+        )
+    return f"[Bedrock Error: Model '{chosen_model}' failed: {err}]"
+
+
 def classic_chat(
     prompt: str, history: list, model: str = DEFAULT_MODEL, image: str | None = None
 ) -> str:
@@ -195,7 +214,7 @@ def classic_chat(
         return resp.choices[0].message.content or ""
     except Exception as err:
         print(f"[Bedrock] Request error with model '{chosen_model}': {err}")
-        return f"[Bedrock Error: Request failed: {err}]"
+        return _format_bedrock_error(chosen_model, err)
 
 
 def stream_chat(
@@ -252,16 +271,8 @@ def stream_chat(
                     if delta_content:
                         yield delta_content
         except Exception as err:
-            err_str = str(err)
             print(f"[Bedrock] Stream error with model '{chosen_model}': {err}")
-            if "404" in err_str or "not_found" in err_str:
-                yield (
-                    f"[Bedrock Notice: Model '{chosen_model}' returned 404 Not Found on Amazon Bedrock Mantle. "
-                    f"AWS has this model in preview/catalog, but its runtime chat endpoint is not activated yet in region '{get_region()}'. "
-                    f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
-                )
-            else:
-                yield f"[Bedrock Error: Model '{chosen_model}' failed: {err}]"
+            yield _format_bedrock_error(chosen_model, err)
         return
 
     # Tool calling enabled path
@@ -283,16 +294,8 @@ def stream_chat(
                     if delta_content:
                         yield delta_content
         except Exception as err:
-            err_str = str(err)
             print(f"[Bedrock] Fallback stream error: {err}")
-            if "404" in err_str or "not_found" in err_str:
-                yield (
-                    f"[Bedrock Notice: Model '{chosen_model}' returned 404 Not Found on Amazon Bedrock Mantle. "
-                    f"AWS has this model in preview/catalog, but its runtime chat endpoint is not activated yet in region '{get_region()}'. "
-                    f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
-                )
-            else:
-                yield f"[Bedrock Error: {err}]"
+            yield _format_bedrock_error(chosen_model, err)
         return
 
     current_round = 0
@@ -313,16 +316,8 @@ def stream_chat(
                 **stream_kwargs,
             )
         except Exception as err:
-            err_str = str(err)
             print(f"[Bedrock] Tool stream error with model '{chosen_model}': {err}")
-            if "404" in err_str or "not_found" in err_str:
-                yield (
-                    f"[Bedrock Notice: Model '{chosen_model}' returned 404 Not Found on Amazon Bedrock Mantle. "
-                    f"AWS has this model in preview/catalog, but its runtime chat endpoint is not activated yet in region '{get_region()}'. "
-                    f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
-                )
-            else:
-                yield f"[Bedrock Error: Model '{chosen_model}' failed: {err}]"
+            yield _format_bedrock_error(chosen_model, err)
             return
 
         tool_calls_dict: dict[int, dict] = {}

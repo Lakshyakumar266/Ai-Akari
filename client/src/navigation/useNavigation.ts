@@ -21,6 +21,10 @@ export function getProviderForModel(model: string, fallbackProvider?: string): s
   if (!model) return fallbackProvider || DEFAULT_PROVIDER;
   const lower = model.toLowerCase();
   if (
+    lower.startsWith("openai.") ||
+    lower.includes("gpt-6") ||
+    lower.includes("gpt-5.5") ||
+    lower.includes("luna") ||
     lower.includes("gpt-oss") ||
     lower.startsWith("mistral.ministral-3") ||
     lower.includes("gemma-3") ||
