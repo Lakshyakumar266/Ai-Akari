@@ -298,6 +298,22 @@ const PROVIDERS: ProviderDetail[] = [
         visionSupported: false,
       },
       {
+        id: "openai.gpt-6-luna",
+        name: "OpenAI GPT-6 Luna",
+        badge: "Frontier",
+        context: "256k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
+      {
+        id: "openai.gpt-5.5",
+        name: "OpenAI GPT-5.5",
+        badge: "Flagship",
+        context: "256k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
+      {
         id: "google.gemma-3-27b-it",
         name: "Google Gemma 3 27B",
         badge: "Frontier",

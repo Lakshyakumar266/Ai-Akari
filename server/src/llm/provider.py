@@ -232,6 +232,18 @@ AVAILABLE_PROVIDERS = [
                 "vision_supported": False,
             },
             {
+                "id": "openai.gpt-6-luna",
+                "name": "OpenAI GPT-6 Luna (Frontier)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "openai.gpt-5.5",
+                "name": "OpenAI GPT-5.5 (Flagship)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
                 "id": "google.gemma-3-27b-it",
                 "name": "Google Gemma 3 27B",
                 "tool_calling_supported": False,
@@ -348,6 +360,9 @@ def is_vision_supported(
             or "vl" in lower
             or "vision" in lower
             or "pixtral" in lower
+            or "gpt-6" in lower
+            or "gpt-5.5" in lower
+            or "luna" in lower
         ):
             return True
 
@@ -395,6 +410,10 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
         lower = model_id.lower()
         if (
             "gpt-oss" in lower
+            or "gpt-6" in lower
+            or "gpt-5.5" in lower
+            or "luna" in lower
+            or lower.startswith("openai.")
             or "ministral-3" in lower
             or "gemma-3" in lower
             or "qwen3-32b" in lower

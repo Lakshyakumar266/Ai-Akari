@@ -55,6 +55,8 @@ The following high-performance foundation models are available and verified on B
 | `deepseek.v3.2` | **DeepSeek V3.2** | Disabled | Bedrock-assisted | 64k |
 | `openai.gpt-oss-120b` | **OpenAI GPT-OSS 120B (Reasoning Flagship)** | Supported | Bedrock-assisted | 128k |
 | `openai.gpt-oss-20b` | **OpenAI GPT-OSS 20B (Fast Reasoning)** | Supported | Bedrock-assisted | 128k |
+| `openai.gpt-6-luna` | **OpenAI GPT-6 Luna (Frontier)** | Supported | **Native Vision** | 256k |
+| `openai.gpt-5.5` | **OpenAI GPT-5.5 (Flagship)** | Supported | **Native Vision** | 256k |
 | `anthropic.claude-sonnet-5` | **Claude Sonnet 5** | Supported | Preview | 200k |
 | `anthropic.claude-opus-5` | **Claude Opus 5 (Flagship)** | Supported | Preview | 200k |
 

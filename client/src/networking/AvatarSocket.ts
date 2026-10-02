@@ -57,6 +57,10 @@ class AvatarSocket {
     if (urlModel) {
       const lower = urlModel.toLowerCase();
       if (
+        lower.startsWith("openai.") ||
+        lower.includes("gpt-6") ||
+        lower.includes("gpt-5.5") ||
+        lower.includes("luna") ||
         lower.includes("gpt-oss") ||
         lower.startsWith("mistral.ministral-3") ||
         lower.includes("gemma-3") ||
