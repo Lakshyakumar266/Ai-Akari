@@ -1,27 +1,3 @@
-/**
- * AvatarSocket
- *
- * WebSocket bridge between the Python server and the browser.
- *
- * Protocol:
- *   - Binary frames → packet[0] is the packet type:
- *       1 = AUDIO_CHUNK     → enqueued on audioQueue for gapless playback
- *       2 = AUDIO_END       → stream finished
- *       3 = AUDIO_INTERRUPT → stop all audio immediately
- *
- *   - JSON text frames → AvatarEvent dispatched on avatarEvents bus:
- *       transcript  → subtitle display
- *       emotion     → VRM expression
- *       animation   → body animation
- *       thinking_*  → UI state
- *       speech_*    → UI state
- *       speech      → carries text/timeline (received but not used for lipsync)
- *
- * LipSync:
- *   Audio-reactive. No timing cursors, no scheduledAt, no delay_ms.
- *   LipSyncController reads live RMS from the AnalyserNode every frame.
- */
-
 import { avatarEvents } from "./EventBus";
 import type { AvatarEvent, SpeechSegmentEvent, ConfigEvent } from "./types";
 import { audioPlayer } from "../audio/AudioPlayer";
@@ -98,7 +74,7 @@ class AvatarSocket {
     if (typeof window === "undefined") return null;
     const storedTools = localStorage.getItem("akari_tool_calling_enabled");
     const enabled = storedTools !== null ? storedTools === "true" : true;
-    return { enabled, maxCalls: 5 };
+    return { enabled, maxCalls: 20 };
   })();
 
   /**
@@ -178,20 +154,21 @@ class AvatarSocket {
    * Sets whether Tool Calling is enabled on the backend.
    */
   setToolCalling(enabled: boolean, maxCalls?: number) {
-    this.pendingToolCalling = { enabled, maxCalls };
+    const finalMaxCalls = maxCalls ?? this.pendingToolCalling?.maxCalls ?? 20;
+    this.pendingToolCalling = { enabled, maxCalls: finalMaxCalls };
     if (this.lastConfig) {
       this.lastConfig = {
         ...this.lastConfig,
         tool_calling_enabled: enabled,
-        max_tool_calls: maxCalls ?? this.lastConfig.max_tool_calls,
+        max_tool_calls: finalMaxCalls,
       };
     }
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      console.log(`[AvatarSocket] Sending set_tool_calling: enabled=${enabled}, maxCalls=${maxCalls}`);
+      console.log(`[AvatarSocket] Sending set_tool_calling: enabled=${enabled}, maxCalls=${finalMaxCalls}`);
       this.send({
         type: "set_tool_calling",
         enabled,
-        max_calls: maxCalls,
+        max_calls: finalMaxCalls,
       });
     }
   }
@@ -401,3 +378,27 @@ class AvatarSocket {
 }
 
 export const avatarSocket = new AvatarSocket();
+
+/**
+ * AvatarSocket Architecture
+ *
+ * WebSocket bridge between the Python server and the browser.
+ *
+ * Protocol:
+ *   - Binary frames → packet[0] is the packet type:
+ *       1 = AUDIO_CHUNK     → enqueued on audioQueue for gapless playback
+ *       2 = AUDIO_END       → stream finished
+ *       3 = AUDIO_INTERRUPT → stop all audio immediately
+ *
+ *   - JSON text frames → AvatarEvent dispatched on avatarEvents bus:
+ *       transcript  → subtitle display
+ *       emotion     → VRM expression
+ *       animation   → body animation
+ *       thinking_*  → UI state
+ *       speech_*    → UI state
+ *       speech      → carries text/timeline (received but not used for lipsync)
+ *
+ * LipSync:
+ *   Audio-reactive. No timing cursors, no scheduledAt, no delay_ms.
+ *   LipSyncController reads live RMS from the AnalyserNode every frame.
+ */

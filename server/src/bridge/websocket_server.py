@@ -406,7 +406,7 @@ async def client_handler(websocket: ServerConnection):
                     enabled = bool(data.get("enabled", False))
                     if "max_calls" in data:
                         try:
-                            _max_tool_calls = max(1, min(10, int(data["max_calls"])))
+                            _max_tool_calls = max(1, min(20, int(data["max_calls"])))
                         except Exception:
                             pass
 

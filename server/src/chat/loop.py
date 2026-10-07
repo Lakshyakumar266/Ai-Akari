@@ -21,7 +21,7 @@ from mistralai.client.models import (
     UserMessage,
 )
 
-from src.config import ENABLE_SUBTITLES
+from src.config import ENABLE_SUBTITLES, MAX_TOOL_CALL_ROUNDS
 from src.bridge.dispatcher import dispatch
 from src.bridge.events import (
     transcript,
@@ -112,7 +112,7 @@ async def process_chat_message(
     user_text: str,
     image: str | None = None,
     tools_enabled: bool = False,
-    max_tool_rounds: int = 5,
+    max_tool_rounds: int = MAX_TOOL_CALL_ROUNDS,
 ):
     """
     End-to-end pipeline for a user chat message:

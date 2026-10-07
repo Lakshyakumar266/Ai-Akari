@@ -56,13 +56,15 @@ uv run python -m src.main
 
 - **Multi-Character Companion Support**: Interactive 3D avatars including **Akari Watanabe** and **Espeon** with idle motion (blinking, breathing, camera tracking), playable `.vrma` animations, and blendable facial expressions.
 - **Pluggable LLM Inference Providers**: Dynamic runtime switching between foundation model providers:
-  - **AWS Bedrock Mantle**: Ministral 3 (8B/14B), Mistral Large 3, Google Gemma 4 (with native tool calling), Google Gemma 3, Qwen 3 VL, OpenAI GPT-OSS, OpenAI GPT-6 Luna, and OpenAI GPT-5.5.
+  - **AWS Bedrock Mantle**: Ministral 3 (8B/14B), Mistral Large 3, OpenAI GPT-OSS (120B/20B), Google Gemma 3 (1B–27B), and Qwen 3 (VL 8B–235B).
   - **OpenAI**: GPT-4o, GPT-4o Mini, GPT-4 Turbo.
-  - **OpenRouter (Free Tier)**: Multi-model auto router, Google Gemma 4 (Free), Ling 3.0 Flash, Liquid LFM, and Space Bunny.
+  - **OpenRouter (Free Tier)**: Multi-model auto router, Google Gemma 4 (Free, with native tool calling), Ling 3.0 Flash, Liquid LFM, and Space Bunny.
   - **Free.ai Gateway**: Qwen 2.5 7B and Qwen 3 8B.
   - **Mistral AI**: Ministral 8B, Pixtral 12B, and Mistral Small.
 - **Built-in Tool Calling & Function Execution**:
-  - Live Google Web Search for real-time information retrieval
+  - Up to 20 multi-turn tool execution rounds per window with automated pre-decline catalog inspection
+  - Dynamic tool discovery (`get_available_tools` / `get_tool_list`)
+  - Live DuckDuckGo & Tavily Web Search and direct web page reading
   - System Analytics (CPU, memory, storage telemetry)
   - Timezone-aware Clock, World Time, and Calendar tools
   - Math & calculation evaluation

@@ -1158,10 +1158,13 @@ def get_available_tools() -> dict[str, Any]:
     """
     Returns a catalog of all currently enabled and registered tools with their purposes and usage instructions.
     Invoke this whenever you need to check which tools or capabilities are available to assist {{user}}.
+    MANDATORY: Must be executed before declining any request or saying you cannot perform an action.
     """
     tools_summary = []
+    seen = set()
     for tool in BUILTIN_TOOLS:
-        if tool.enabled:
+        if tool.enabled and tool.name not in seen:
+            seen.add(tool.name)
             tools_summary.append({
                 "name": tool.name,
                 "display_name": tool.user_friendly_name,
@@ -1175,19 +1178,36 @@ def get_available_tools() -> dict[str, Any]:
     }
 
 
+def get_tool_list() -> dict[str, Any]:
+    """Alias for get_available_tools."""
+    return get_available_tools()
+
+
 # ─── Registered Tool Catalog ──────────────────────────────────────────────────
 
 BUILTIN_TOOLS: list[Tool] = [
     Tool(
         name="get_available_tools",
         user_friendly_name="Available Tools",
-        description="Returns a complete list of all currently available tools, capabilities, and descriptions.",
+        description="Returns a complete list of all currently available tools, capabilities, and descriptions. MANDATORY: Call this before declining any request, or whenever asked for tool list or capabilities.",
         parameters={
             "type": "object",
             "properties": {},
             "required": [],
         },
         func=get_available_tools,
+        enabled=True,
+    ),
+    Tool(
+        name="get_tool_list",
+        user_friendly_name="Tool List",
+        description="Returns a complete list of all currently available tools, capabilities, and descriptions. Alias for get_available_tools. Call this before declining any request.",
+        parameters={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        func=get_tool_list,
         enabled=True,
     ),
     Tool(
