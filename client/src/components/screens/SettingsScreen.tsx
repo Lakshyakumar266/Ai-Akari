@@ -851,7 +851,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 </div>
                 <p className="tools-card-desc">
                   {isCurrentModelToolSupported
-                    ? "Allows Akari to invoke external tools (such as live time, date, and system status) to provide accurate answers rather than hallucinating."
+                    ? "Allow's to invoke external tools (such as live time, date, and system status) to provide accurate answers rather than hallucinating."
                     : "The selected model does not support tool calling. Choose a compatible model (e.g. Ministral 8B or Qwen 2.5 7B) to enable this feature."}
                 </p>
               </div>

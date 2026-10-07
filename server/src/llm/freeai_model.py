@@ -5,7 +5,7 @@ import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT, get_system_prompt
-from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
+from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT, MAX_TOOL_CALL_ROUNDS
 
 load_dotenv()
 
@@ -97,7 +97,7 @@ def stream_chat(
     history: list,
     model: str = DEFAULT_MODEL,
     tools_enabled: bool = False,
-    max_tool_rounds: int = 5,
+    max_tool_rounds: int = MAX_TOOL_CALL_ROUNDS,
     on_tool_activity: Callable[[str, str], None] | None = None,
     cancel_event: threading.Event | None = None,
 ) -> Generator[str, None, None]:

@@ -22,7 +22,7 @@ ENABLE_CHAT_INPUT = True
 # Tool Calling / Function Calling Configuration:
 # Global switch: True by default for supported models
 TOOL_CALLING_ENABLED = True
-MAX_TOOL_CALL_ROUNDS = 5
+MAX_TOOL_CALL_ROUNDS = int(os.getenv("MAX_TOOL_CALL_ROUNDS", "20"))
 TOOL_EXECUTION_TIMEOUT = float(os.getenv("TOOL_EXECUTION_TIMEOUT", "20.0"))
 
 # LLM Temperature Configuration:

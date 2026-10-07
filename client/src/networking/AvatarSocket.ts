@@ -98,7 +98,7 @@ class AvatarSocket {
     if (typeof window === "undefined") return null;
     const storedTools = localStorage.getItem("akari_tool_calling_enabled");
     const enabled = storedTools !== null ? storedTools === "true" : true;
-    return { enabled, maxCalls: 5 };
+    return { enabled, maxCalls: 20 };
   })();
 
   /**
@@ -178,20 +178,21 @@ class AvatarSocket {
    * Sets whether Tool Calling is enabled on the backend.
    */
   setToolCalling(enabled: boolean, maxCalls?: number) {
-    this.pendingToolCalling = { enabled, maxCalls };
+    const finalMaxCalls = maxCalls ?? this.pendingToolCalling?.maxCalls ?? 20;
+    this.pendingToolCalling = { enabled, maxCalls: finalMaxCalls };
     if (this.lastConfig) {
       this.lastConfig = {
         ...this.lastConfig,
         tool_calling_enabled: enabled,
-        max_tool_calls: maxCalls ?? this.lastConfig.max_tool_calls,
+        max_tool_calls: finalMaxCalls,
       };
     }
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      console.log(`[AvatarSocket] Sending set_tool_calling: enabled=${enabled}, maxCalls=${maxCalls}`);
+      console.log(`[AvatarSocket] Sending set_tool_calling: enabled=${enabled}, maxCalls=${finalMaxCalls}`);
       this.send({
         type: "set_tool_calling",
         enabled,
-        max_calls: maxCalls,
+        max_calls: finalMaxCalls,
       });
     }
   }

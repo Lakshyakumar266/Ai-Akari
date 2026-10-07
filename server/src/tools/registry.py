@@ -21,7 +21,15 @@ class ToolRegistry:
         self._tools[tool.name] = tool
 
     def get_tool(self, name: str) -> Tool | None:
-        return self._tools.get(name)
+        tool = self._tools.get(name)
+        if tool is not None:
+            return tool
+        # Resilient alias mapping for tool discovery
+        if name in ("get_tool_list", "tool_list", "tools_list", "list_tools", "get_tools"):
+            return self._tools.get("get_available_tools") or self._tools.get("get_tool_list")
+        if name in ("get_available_tools", "available_tools"):
+            return self._tools.get("get_tool_list") or self._tools.get("get_available_tools")
+        return None
 
     def get_all_tools(self) -> list[Tool]:
         return list(self._tools.values())
@@ -36,7 +44,13 @@ class ToolRegistry:
 
     def get_tools_summary(self) -> list[dict[str, Any]]:
         """Returns summary list for client Settings UI."""
-        return [t.to_summary_dict() for t in self.get_all_tools()]
+        summaries = []
+        for t in self.get_all_tools():
+            # Hide redundant internal alias in Settings screen
+            if t.name == "get_tool_list":
+                continue
+            summaries.append(t.to_summary_dict())
+        return summaries
 
     async def execute_tool(
         self, name: str, arguments: dict[str, Any] | str, timeout: float = 10.0

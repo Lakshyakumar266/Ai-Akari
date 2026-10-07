@@ -468,6 +468,7 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
 
 import threading
 from typing import Callable
+from src.config import MAX_TOOL_CALL_ROUNDS
 
 
 def stream_chat(
@@ -475,7 +476,7 @@ def stream_chat(
     history: list,
     image: str | None = None,
     tools_enabled: bool = False,
-    max_tool_rounds: int = 5,
+    max_tool_rounds: int = MAX_TOOL_CALL_ROUNDS,
     on_tool_activity: Callable[[str, str], None] | None = None,
     cancel_event: threading.Event | None = None,
 ) -> Generator[str, None, None]:
