@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import asyncio
 import json
 import numpy as np
@@ -10,7 +11,6 @@ from .broadcaster import broadcaster
 from .protocol import BinaryPacket
 from src.asr.server_asr import unload_asr_model
 from src.asr.chat_whisper import unload_stream_model
-from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 from src.llm import (
     get_provider_info,
     set_active_provider,
@@ -22,8 +22,8 @@ from src.llm import (
 from src.config import TOOL_CALLING_ENABLED, MAX_TOOL_CALL_ROUNDS
 from src.tools import tool_registry
 
-HOST = "127.0.0.1"
-PORT = 8765
+HOST = os.getenv("HOST", "127.0.0.1")
+PORT = int(os.getenv("PORT", "8765"))
 
 # Dynamic mode state: True = Chat Mode (client UI driven), False = Stream Mode (server mic loop driven)
 _chat_input_enabled: bool = True
@@ -60,6 +60,7 @@ def get_chat_input_enabled() -> bool:
 
 async def set_chat_input_enabled(enabled: bool):
     global _chat_input_enabled
+    from src.voice.loop import start_voice_loop, stop_voice_loop, is_voice_loop_running
 
     if _chat_input_enabled == enabled and (not enabled and is_voice_loop_running()):
         return
@@ -461,6 +462,7 @@ async def client_handler(websocket: ServerConnection):
         if broadcaster.client_count == 0:
             print("[Bridge] All clients disconnected. Halting voice loop and unloading models.")
             try:
+                from src.voice.loop import stop_voice_loop
                 await stop_voice_loop()
             except Exception as loop_err:
                 print(f"[Bridge] Error halting voice loop: {loop_err}")

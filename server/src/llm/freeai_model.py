@@ -4,7 +4,7 @@ from typing import Generator
 import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
-from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT, get_system_prompt
 from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
 load_dotenv()
@@ -33,7 +33,7 @@ FREEAI_TOOL_SYSTEM_PROMPT = SYSTEM_PROMPT_AKARI_ASSISTANT
 
 def _format_messages(prompt: str, history: list, tools_enabled: bool = False) -> list[dict]:
     """Converts mixed history items (Mistral UserMessage/AssistantMessage or dicts) into OpenAI standard format."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
+    messages = [{"role": "system", "content": get_system_prompt(tools_enabled=tools_enabled)}]
 
     for item in history:
         if isinstance(item, dict):

@@ -208,6 +208,22 @@ const PROVIDERS: ProviderDetail[] = [
         context: "262k context",
         toolCallingSupported: true,
       },
+      {
+        id: "google/gemma-4-31b-it:free",
+        name: "Google Gemma 4 31B (Free)",
+        badge: "Tool Native",
+        context: "256k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
+      {
+        id: "google/gemma-4-26b-a4b-it:free",
+        name: "Google Gemma 4 26B A4B (Free)",
+        badge: "MoE Free",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: true,
+      },
     ],
   },
   {
@@ -250,35 +266,11 @@ const PROVIDERS: ProviderDetail[] = [
         visionSupported: true,
       },
       {
-        id: "google.gemma-3-4b-it",
-        name: "Google Gemma 3 4B",
-        badge: "Fast",
-        context: "32k context",
-        toolCallingSupported: false,
-        visionSupported: false,
-      },
-      {
-        id: "google.gemma-3-12b-it",
-        name: "Google Gemma 3 12B",
-        badge: "Smart",
-        context: "32k context",
-        toolCallingSupported: false,
-        visionSupported: false,
-      },
-      {
         id: "qwen.qwen3-32b",
         name: "Qwen 3 32B",
         badge: "High Reasoning",
         context: "32k context",
         toolCallingSupported: true,
-        visionSupported: false,
-      },
-      {
-        id: "deepseek.v3.1",
-        name: "DeepSeek V3.1",
-        badge: "Reasoning",
-        context: "64k context",
-        toolCallingSupported: false,
         visionSupported: false,
       },
       {
@@ -298,20 +290,20 @@ const PROVIDERS: ProviderDetail[] = [
         visionSupported: false,
       },
       {
-        id: "openai.gpt-6-luna",
-        name: "OpenAI GPT-6 Luna",
-        badge: "Frontier",
-        context: "256k context",
-        toolCallingSupported: true,
-        visionSupported: true,
+        id: "google.gemma-3-4b-it",
+        name: "Google Gemma 3 4B",
+        badge: "Fast",
+        context: "32k context",
+        toolCallingSupported: false,
+        visionSupported: false,
       },
       {
-        id: "openai.gpt-5.5",
-        name: "OpenAI GPT-5.5",
-        badge: "Flagship",
-        context: "256k context",
-        toolCallingSupported: true,
-        visionSupported: true,
+        id: "google.gemma-3-12b-it",
+        name: "Google Gemma 3 12B",
+        badge: "Smart",
+        context: "32k context",
+        toolCallingSupported: false,
+        visionSupported: false,
       },
       {
         id: "google.gemma-3-27b-it",
@@ -322,26 +314,34 @@ const PROVIDERS: ProviderDetail[] = [
         visionSupported: false,
       },
       {
-        id: "deepseek.v3.2",
-        name: "DeepSeek V3.2",
-        badge: "Deep Reasoning",
+        id: "deepseek.v3.1",
+        name: "DeepSeek V3.1",
+        badge: "Reasoning",
         context: "64k context",
-        toolCallingSupported: false,
-        visionSupported: false,
-      },
-      {
-        id: "anthropic.claude-opus-5",
-        name: "Claude Opus 5",
-        badge: "Preview",
-        context: "200k context",
         toolCallingSupported: true,
         visionSupported: false,
       },
       {
-        id: "anthropic.claude-sonnet-5",
-        name: "Claude Sonnet 5",
-        badge: "Preview",
-        context: "200k context",
+        id: "deepseek.v3.2",
+        name: "DeepSeek V3.2",
+        badge: "Deep Reasoning",
+        context: "64k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "zai.glm-5",
+        name: "Zhipu GLM 5",
+        badge: "Frontier",
+        context: "128k context",
+        toolCallingSupported: true,
+        visionSupported: false,
+      },
+      {
+        id: "moonshotai.kimi-k2.5",
+        name: "Moonshot Kimi K2.5",
+        badge: "Multilingual",
+        context: "128k context",
         toolCallingSupported: true,
         visionSupported: false,
       },
@@ -496,6 +496,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     if (!defaultModelObj.toolCallingSupported && toolsEnabled) {
       setToolsEnabled(false);
       onUpdateTools?.(false);
+    } else if (defaultModelObj.toolCallingSupported && !toolsEnabled) {
+      setToolsEnabled(true);
+      onUpdateTools?.(true);
     }
   };
 
@@ -508,6 +511,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     if (selectedModelObj && !selectedModelObj.toolCallingSupported && toolsEnabled) {
       setToolsEnabled(false);
       onUpdateTools?.(false);
+    } else if (selectedModelObj && selectedModelObj.toolCallingSupported && !toolsEnabled) {
+      // Automatically re-enable tool calling when selecting a tool-capable model (e.g. GPT-OSS 120B)
+      setToolsEnabled(true);
+      onUpdateTools?.(true);
     }
   };
 
@@ -665,7 +672,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
             <div className="api-key-card">
               <p className="api-key-instructions">
-                Enter your Amazon Bedrock API key / Bearer Token (<span className="code-hint">bedrock-api-key-...</span>) to use Ministral 3, Gemma 3, Qwen 3, and Claude models.
+                Enter your Amazon Bedrock API key / Bearer Token (<span className="code-hint">bedrock-api-key-...</span>) to use Ministral 3, Gemma 4 (tool calling enabled), Gemma 3, Qwen 3, and Claude models.
               </p>
 
               <div className="api-key-input-wrapper">

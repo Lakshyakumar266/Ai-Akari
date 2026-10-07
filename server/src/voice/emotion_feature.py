@@ -64,6 +64,36 @@ EMOTION_ALIASES: dict[str, str] = {
 }
 
 
+# Matches JSON objects up to 2 levels of nesting containing function / tool parameters or results
+NESTED_JSON_LEAK_PATTERN = re.compile(
+    r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}',
+    re.DOTALL
+)
+
+TOOL_CONTROL_TOKENS_PATTERN = re.compile(
+    r'<\|?(?:tool_call|tool_response|thought)\|?>.*?<\|?/?(?:tool_call|tool_response|thought)\|?>',
+    re.DOTALL
+)
+
+
+def strip_tool_leakage(text: str) -> str:
+    """Strips leaked raw JSON tool call envelopes, results, or control tokens from spoken text."""
+    if not text:
+        return ""
+    def replace_json(match):
+        content = match.group(0)
+        # Strip if it looks like a function call or tool response envelope
+        if any(k in content for k in ('"function"', '"arguments"', '"time"', '"name"', '"parameters"', '"result"', '"call"')):
+            return ""
+        return content
+
+    cleaned = NESTED_JSON_LEAK_PATTERN.sub(replace_json, text)
+    cleaned = TOOL_CONTROL_TOKENS_PATTERN.sub("", cleaned)
+    cleaned = re.sub(r"<\|?tool_call\|?>call:\w+\{.*?\}<tool_call\|?>", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"<\|?tool_response\|?>", "", cleaned)
+    return cleaned
+
+
 def resolve_emotion(tag_text: str) -> str:
     """Resolves any emotion tag or alias into one of the 6 canonical VRM emotions."""
     clean_tag = tag_text.strip().lower()
@@ -71,11 +101,13 @@ def resolve_emotion(tag_text: str) -> str:
 
 
 def strip_all_emotion_tags(text: str) -> str:
-    """Removes all emotion brackets and markdown formatting from text so TTS and subtitles are completely clean."""
+    """Removes all emotion brackets, leaked tool JSON, and markdown formatting from text so TTS and subtitles are completely clean."""
     if not text:
         return ""
+    # Strip any leaked toolcall JSON or control tags first
+    cleaned = strip_tool_leakage(text)
     # Strip any [tag]
-    cleaned = EMOTION_TAG_PATTERN.sub("", text)
+    cleaned = EMOTION_TAG_PATTERN.sub("", cleaned)
     # Strip Markdown asterisks for actions/emphasis e.g. *any* -> any, *sigh*
     cleaned = re.sub(r"\*+([^*]+)\*+", r"\1", cleaned)
     cleaned = cleaned.replace("*", "")
@@ -88,7 +120,8 @@ def extract_dialogue_and_emotion(raw_text: str) -> tuple[str, Optional[str]]:
     Returns:
         tuple of (clean_spoken_text, capitalized_emotion_name or None)
     """
-    matches = list(EMOTION_TAG_PATTERN.finditer(raw_text))
+    cleaned_input = strip_tool_leakage(raw_text)
+    matches = list(EMOTION_TAG_PATTERN.finditer(cleaned_input))
     detected_emotion = None
 
     if matches:
@@ -96,7 +129,7 @@ def extract_dialogue_and_emotion(raw_text: str) -> tuple[str, Optional[str]]:
         if raw_name in EMOTION_ALIASES:
             detected_emotion = EMOTION_ALIASES[raw_name]
 
-    clean_text = strip_all_emotion_tags(raw_text)
+    clean_text = strip_all_emotion_tags(cleaned_input)
     return clean_text, detected_emotion
 
 
@@ -111,10 +144,13 @@ def split_dialogue_units_with_emotions(
     Returns:
         list of (clean_unit_text, emotion_name) tuples
     """
-    # Split raw_text by emotion tag matches while retaining the tags
+    # Strip any leaked toolcall JSON before splitting into dialogue units
+    cleaned_text = strip_tool_leakage(raw_text)
+
+    # Split cleaned_text by emotion tag matches while retaining the tags
     tokens = re.split(
         r"(\[[a-zA-Z_\-]+\])",
-        raw_text,
+        cleaned_text,
         flags=re.IGNORECASE,
     )
 

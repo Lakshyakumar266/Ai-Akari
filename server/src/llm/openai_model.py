@@ -19,7 +19,7 @@ from typing import Generator, Callable
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT, get_system_prompt
 from src.tools import tool_registry
 from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
@@ -69,9 +69,15 @@ def get_client(api_key: str | None = None) -> OpenAI:
     )
 
 
-def _format_messages(prompt: str, history: list, image: str | None = None) -> list[dict]:
+def _format_messages(
+    prompt: str,
+    history: list,
+    image: str | None = None,
+    tools_enabled: bool = False,
+) -> list[dict]:
     """Converts mixed history items into standard OpenAI format with optional multimodal image support."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
+    sys_prompt = get_system_prompt(tools_enabled=tools_enabled)
+    messages = [{"role": "system", "content": sys_prompt}]
 
     for item in history:
         if isinstance(item, dict):
@@ -168,7 +174,7 @@ def stream_chat(
     )
 
     client = get_client()
-    messages = _format_messages(prompt, history, image=image)
+    messages = _format_messages(prompt, history, image=image, tools_enabled=tools_enabled)
 
     # Fast path: tools disabled
     if not tools_enabled:

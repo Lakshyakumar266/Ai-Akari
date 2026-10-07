@@ -63,7 +63,7 @@ class AvatarSocket {
         lower.includes("luna") ||
         lower.includes("gpt-oss") ||
         lower.startsWith("mistral.ministral-3") ||
-        lower.includes("gemma-3") ||
+        lower.includes("gemma") ||
         lower.startsWith("qwen.qwen3-32b") ||
         lower.startsWith("deepseek.v3") ||
         lower.startsWith("mistral.mistral-large-3") ||

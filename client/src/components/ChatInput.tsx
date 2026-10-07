@@ -1,21 +1,3 @@
-/**
- * ChatInput
- *
- * Glassmorphic floating chat bar for Akari Watanabe.
- *
- * Voice recording:
- *   - Captures raw 16kHz mono PCM via AudioContext
- *   - Streams int16 binary chunks over WebSocket (packet type 0x10)
- *   - Server runs single-model Whisper (tiny.en) every ~0.5s for real-time live streaming
- *   - Words stream in live word-by-word and append to chat without rewriting
- *
- * Text input:
- *   - Instant zero-latency typing with rAF-debounced sizing and GPU-isolated backdrop
- *   - Enter key sends message immediately; Shift+Enter adds newline
- *   - Native key event isolation stops propagation to window/canvas listeners
- *   - Direct DOM button updating for zero-latency visual feedback
- */
-
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
   IconMicrophone,
@@ -321,7 +303,7 @@ export default function ChatInput({ character = "akari" }: ChatInputProps) {
         lower.includes("luna") ||
         lower.includes("gpt-oss") ||
         lower.startsWith("mistral.ministral-3") ||
-        lower.includes("gemma-3") ||
+        lower.includes("gemma") ||
         lower.startsWith("qwen.qwen3-32b") ||
         lower.startsWith("deepseek.v3") ||
         lower.startsWith("mistral.mistral-large-3") ||
@@ -679,3 +661,21 @@ export default function ChatInput({ character = "akari" }: ChatInputProps) {
     </div>
   );
 }
+
+/**
+ * ChatInput Architecture
+ *
+ * Glassmorphic floating chat bar for Akari Watanabe.
+ *
+ * Voice recording:
+ *   - Captures raw 16kHz mono PCM via AudioContext
+ *   - Streams int16 binary chunks over WebSocket (packet type 0x10)
+ *   - Server runs single-model Whisper (tiny.en) every ~0.5s for real-time live streaming
+ *   - Words stream in live word-by-word and append to chat without rewriting
+ *
+ * Text input:
+ *   - Instant zero-latency typing with rAF-debounced sizing and GPU-isolated backdrop
+ *   - Enter key sends message immediately; Shift+Enter adds newline
+ *   - Native key event isolation stops propagation to window/canvas listeners
+ *   - Direct DOM button updating for zero-latency visual feedback
+ */

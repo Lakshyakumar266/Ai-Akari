@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from mistralai.client import Mistral
 from mistralai.client.models import UserMessage, SystemMessage, AssistantMessage
-from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT, get_system_prompt
 from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
 load_dotenv()
@@ -29,7 +29,7 @@ def classic_chat(
         user_msg = UserMessage(content=prompt)
 
     messages = (
-        [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
+        [SystemMessage(content=get_system_prompt(tools_enabled=False))]
         + _normalize_history_for_mistral(history)
         + [user_msg]
     )
@@ -185,7 +185,7 @@ def stream_chat(
         user_msg = UserMessage(content=prompt)
 
     messages = (
-        [SystemMessage(content=SYSTEM_PROMPT_AKARI_ASSISTANT)]
+        [SystemMessage(content=get_system_prompt(tools_enabled=tools_enabled))]
         + normalized_history
         + [user_msg]
     )
