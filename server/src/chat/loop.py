@@ -38,6 +38,7 @@ from src.voice.emotion_feature import (
     EmotionFeatureManager,
     strip_all_emotion_tags,
     split_dialogue_units_with_emotions,
+    strip_tool_leakage,
 )
 from src.prompts.system_prompt_akari import EXIT_PHRASES
 
@@ -170,6 +171,8 @@ async def process_chat_message(
         started_printing = False
         buffer = ""
         current_sentence = ""
+        leak_buffer = ""
+        holding_potential_leak = False
 
         try:
             for token in stream_chat(
@@ -185,17 +188,36 @@ async def process_chat_message(
                     print("\n[Chat] Stream cancelled by user stop request.")
                     return
 
-                if not started_printing:
+                # Suppress leaked JSON tool envelopes or control tags at the start of generation
+                if not started_printing and (token.lstrip().startswith(("{", "<|", "<tool_call")) or holding_potential_leak):
+                    holding_potential_leak = True
+                    leak_buffer += token
+                    cleaned_leak = strip_tool_leakage(leak_buffer)
+                    if cleaned_leak.strip():
+                        holding_potential_leak = False
+                        try:
+                            print("[Chat] Akari: ", end="", flush=True)
+                            print(cleaned_leak, end="", flush=True)
+                        except Exception:
+                            pass
+                        started_printing = True
+                        token = cleaned_leak
+                        leak_buffer = ""
+                    else:
+                        continue
+                else:
+                    if not started_printing:
+                        try:
+                            print("[Chat] Akari: ", end="", flush=True)
+                        except Exception:
+                            pass
+                        started_printing = True
+
                     try:
-                        print("[Chat] Akari: ", end="", flush=True)
+                        print(token, end="", flush=True)
                     except Exception:
                         pass
-                    started_printing = True
 
-                try:
-                    print(token, end="", flush=True)
-                except Exception:
-                    pass
                 full_reply.append(token)
                 buffer += token
 

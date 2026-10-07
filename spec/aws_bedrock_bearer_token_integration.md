@@ -47,18 +47,16 @@ The following high-performance foundation models are available and verified on B
 | `mistral.ministral-3-14b-instruct` | **Ministral 3 14B** | Supported | **Native Vision** | 128k |
 | `mistral.mistral-large-3-675b-instruct`| **Mistral Large 3 675B** | Supported | **Native Vision** | 128k |
 | `qwen.qwen3-vl-235b-a22b-instruct` | **Qwen 3 VL 235B (Vision Flagship)** | Supported | **Native Vision** | 128k |
-| `google.gemma-3-4b-it` | **Google Gemma 3 4B (Fast)** | Disabled | Bedrock-assisted | 32k |
-| `google.gemma-3-12b-it` | **Google Gemma 3 12B** | Disabled | Bedrock-assisted | 32k |
-| `google.gemma-3-27b-it` | **Google Gemma 3 27B** | Disabled | Bedrock-assisted | 32k |
-| `qwen.qwen3-32b` | **Qwen 3 32B** | Supported | Bedrock-assisted | 32k |
-| `deepseek.v3.1` | **DeepSeek V3.1** | Disabled | Bedrock-assisted | 64k |
-| `deepseek.v3.2` | **DeepSeek V3.2** | Disabled | Bedrock-assisted | 64k |
+| `qwen.qwen3-32b` | **Qwen 3 32B (High Reasoning)** | Supported | Bedrock-assisted | 32k |
 | `openai.gpt-oss-120b` | **OpenAI GPT-OSS 120B (Reasoning Flagship)** | Supported | Bedrock-assisted | 128k |
 | `openai.gpt-oss-20b` | **OpenAI GPT-OSS 20B (Fast Reasoning)** | Supported | Bedrock-assisted | 128k |
-| `openai.gpt-6-luna` | **OpenAI GPT-6 Luna (Frontier)** | Supported | **Native Vision** | 256k |
-| `openai.gpt-5.5` | **OpenAI GPT-5.5 (Flagship)** | Supported | **Native Vision** | 256k |
-| `anthropic.claude-sonnet-5` | **Claude Sonnet 5** | Supported | Preview | 200k |
-| `anthropic.claude-opus-5` | **Claude Opus 5 (Flagship)** | Supported | Preview | 200k |
+| `google.gemma-3-4b-it` | **Google Gemma 3 4B (Fast)** | Disabled (Bypass) | Bedrock-assisted | 32k |
+| `google.gemma-3-12b-it` | **Google Gemma 3 12B** | Disabled (Bypass) | Bedrock-assisted | 32k |
+| `google.gemma-3-27b-it` | **Google Gemma 3 27B** | Disabled (Bypass) | Bedrock-assisted | 32k |
+| `deepseek.v3.1` | **DeepSeek V3.1** | Supported | Bedrock-assisted | 64k |
+| `deepseek.v3.2` | **DeepSeek V3.2** | Supported | Bedrock-assisted | 64k |
+| `zai.glm-5` | **Zhipu GLM 5 (Frontier)** | Supported | Bedrock-assisted | 128k |
+| `moonshotai.kimi-k2.5` | **Moonshot Kimi K2.5** | Supported | Bedrock-assisted | 128k |
 
 *Note: For vision inputs, when `vision_supported` is True (e.g. Ministral 3, Qwen VL), images are passed directly to the Bedrock model as native multimodal image_url messages. When False (text-only models), visual features are extracted automatically using AWS Bedrock Ministral 3 and prepended to the prompt context.*
 
@@ -71,16 +69,15 @@ The following high-performance foundation models are available and verified on B
    - Calling `bedrock-mantle.{region}.api.aws/v1` via OpenAI-compatible REST endpoints executes cleanly with full tool calling, streaming, and high throughput.
 2. **Tool Calling Compatibility:**
    - Bedrock Mantle natively understands OpenAI's `tools` and `tool_choice` format, returning structured function call deltas (`delta.tool_calls`) that parse with existing tool execution loops for Mistral, Qwen, and OpenAI GPT-OSS.
-3. **Google Gemma 3 on Bedrock Mantle:**
-   - On Bedrock Mantle, passing the `tools` parameter to `google.gemma-3-*` models alongside system prompts causes Mantle's proxy to return empty chunks (`content: None`).
-   - When `tools` is omitted, Gemma 3 streams in under 1 second. `bedrock_model.py` automatically detects Gemma models and routes them through fast direct conversational streaming.
+3. **Google Gemma on Bedrock vs. OpenRouter (Gemma 3 vs. Gemma 4):**
+   - **Bedrock Mantle:** Hosts strictly Google Gemma 3 (`google.gemma-3-4b-it`, `google.gemma-3-12b-it`, `google.gemma-3-27b-it`). Gemma 4 does not exist on Bedrock Mantle (returns 404). On Gemma 3, passing the `tools` parameter alongside system prompts causes Mantle's proxy to drop tokens; `bedrock_model.py` automatically routes Gemma 3 via fast conversational streaming bypass.
+   - **OpenRouter:** Natively hosts Google Gemma 4 (`google/gemma-4-31b-it:free` and `google/gemma-4-26b-a4b-it:free`) with full Google function calling specification support (`<|tool_call|>call:name{args}<tool_call|>`, `tool_responses`, and type casting).
 4. **Windows Console Charset (CP1252 vs. UTF-8):**
    - Gemma and GPT-OSS models frequently output emoji characters (e.g. 😊, 👋). In default Python on Windows, writing these to `sys.stdout` caused `UnicodeEncodeError: 'charmap' codec can't encode character`.
    - Fixed by calling `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` in `main.py` and wrapping token terminal printing in safe exception handling.
-5. **Anthropic Claude 5 Mantle Status (404 Not Found):**
-   - In `client.models.list()`, Amazon Bedrock Mantle advertises `anthropic.claude-opus-5` and `anthropic.claude-sonnet-5`.
-   - However, when queried via `/v1/chat/completions`, AWS Bedrock returns HTTP 404 (`{'code': 'not_found_error', 'message': 'not found'}`) because AWS has not yet deployed or enabled the chat completion runtime endpoints for these models in the active region (`ap-south-1`).
-   - Claude Opus 5 and Sonnet 5 are retained in the UI marked as `Preview`. When selected, the backend gracefully catches 404s and informs the user to select an active model (e.g. `mistral.ministral-3-8b-instruct`, `openai.gpt-oss-120b`, `google.gemma-3-4b-it`, `qwen.qwen3-32b`).
+5. **Bedrock Model Activation Audit:**
+   - A live test of all 41 foundation models in `client.models.list()` was performed.
+   - Models returning HTTP 404 or activation errors (`anthropic.claude-opus-5`, `anthropic.claude-sonnet-5`, `google.gemma-4-*`, `openai.gpt-6-*`, `openai.gpt-5.5`) have been filtered out and removed from the active Bedrock model selection. Only models that pass live chat completions with HTTP 200 are exposed to the user.
 6. **Token Detection & UI Status:**
    - The UI Settings screen connects to the backend WebSocket and requests config via `get_config`.
    - When `AWS_BEARER_TOKEN_BEDROCK` is detected in `./server/.env`, the backend reports `"bedrock": true` in `api_keys_configured`.

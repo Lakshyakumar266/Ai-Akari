@@ -15,9 +15,10 @@ from typing import Generator, Callable
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT, get_system_prompt
 from src.tools import tool_registry
 from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
+from .bedrock_model import extract_gemma4_tool_calls
 
 load_dotenv()
 
@@ -49,9 +50,15 @@ def get_client() -> OpenAI:
     )
 
 
-def _format_messages(prompt: str, history: list, image: str | None = None) -> list[dict]:
+def _format_messages(
+    prompt: str,
+    history: list,
+    image: str | None = None,
+    tools_enabled: bool = False,
+) -> list[dict]:
     """Converts mixed history items into standard OpenAI format with optional multimodal image support."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
+    sys_prompt = get_system_prompt(tools_enabled=tools_enabled)
+    messages = [{"role": "system", "content": sys_prompt}]
 
     for item in history:
         if isinstance(item, dict):
@@ -91,7 +98,9 @@ def classic_chat(
             messages=messages,
             temperature=CHAT_TEMPERATURE,
         )
-        return resp.choices[0].message.content or ""
+        raw_text = resp.choices[0].message.content or ""
+        _, clean_text = extract_gemma4_tool_calls(raw_text)
+        return clean_text
     except Exception as err:
         print(f"[OpenRouter] Request error with model '{chosen_model}': {err}")
         return f"[OpenRouter Notice: Request failed: {err}]"
@@ -108,7 +117,7 @@ def stream_chat(
     cancel_event: threading.Event | None = None,
 ) -> Generator[str, None, None]:
     """Yields text tokens as OpenRouter generates them in real-time, with multi-round tool calling support."""
-    messages = _format_messages(prompt, history, image=image)
+    messages = _format_messages(prompt, history, image=image, tools_enabled=tools_enabled)
     chosen_model = model or DEFAULT_MODEL
     print(
         f"[OpenRouter] stream_chat starting with model: '{chosen_model}' (tools_enabled={tools_enabled}, has_image={bool(image)})"
@@ -219,6 +228,22 @@ def stream_chat(
             yield f"[OpenRouter Error: Stream interrupted: {err}]"
             return
 
+        # Check if Gemma 4 (or model) emitted native control tokens in content stream instead of delta.tool_calls
+        if not tool_calls_dict and round_content_chunks:
+            full_round_text = "".join(round_content_chunks)
+            extracted_calls, cleaned_text = extract_gemma4_tool_calls(full_round_text)
+            if extracted_calls:
+                print(
+                    f"[OpenRouter Gemma 4] Extracted {len(extracted_calls)} native tool calls from content stream."
+                )
+                for c_idx, ec in enumerate(extracted_calls):
+                    tool_calls_dict[c_idx] = {
+                        "id": ec["id"],
+                        "name": ec["name"],
+                        "arguments": ec["arguments"],
+                    }
+                round_content_chunks = [cleaned_text] if cleaned_text else []
+
         # If no tool calls were requested, this is the final conversational response
         if not tool_calls_dict:
             for c in round_content_chunks:
@@ -236,13 +261,9 @@ def stream_chat(
             for t in tool_calls_dict.values()
         ]
         accumulated_text = "".join(round_content_chunks).strip()
-        messages.append({
-            "role": "assistant",
-            "content": accumulated_text if accumulated_text else None,
-            "tool_calls": assistant_tool_calls,
-        })
-
-        # Execute each tool call and append tool output message
+        # Execute each tool call and collect results
+        gemma4_tool_responses = []
+        executed_tool_messages = []
         for t in tool_calls_dict.values():
             if cancel_event is not None and cancel_event.is_set():
                 return
@@ -275,12 +296,28 @@ def stream_chat(
                 except Exception:
                     pass
 
-            messages.append({
+            gemma4_tool_responses.append({
+                "name": t_name,
+                "response": result,
+            })
+
+            executed_tool_messages.append({
                 "role": "tool",
                 "tool_call_id": t_id,
                 "name": t_name,
-                "content": json.dumps(result),
+                "content": json.dumps(result) if isinstance(result, (dict, list)) else str(result),
             })
+
+        assistant_msg = {
+            "role": "assistant",
+            "content": accumulated_text if accumulated_text else None,
+            "tool_calls": assistant_tool_calls,
+        }
+        if "gemma" in chosen_model.lower():
+            assistant_msg["tool_responses"] = gemma4_tool_responses
+
+        messages.append(assistant_msg)
+        messages.extend(executed_tool_messages)
 
 
 def classify_emotion(text: str, model: str = DEFAULT_MODEL) -> str:

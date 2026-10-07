@@ -3,8 +3,8 @@ AWS Bedrock LLM Provider
 -------------------------
 Integration with Amazon Bedrock Mantle OpenAI-compatible API
 (https://bedrock-mantle.{region}.api.aws/v1) using AWS_BEARER_TOKEN_BEDROCK.
-Supports models such as Ministral 3 8B, Google Gemma 3, Qwen 3 32B, DeepSeek V3,
-and Claude with full streaming and tool calling (function calling).
+Supports models such as Ministral 3 8B, Google Gemma 4 (31B / 26B MoE / E2B with native tool calling),
+Google Gemma 3, Qwen 3 32B, DeepSeek V3, and Claude with full streaming and tool calling.
 
 Authentication:
   - Environment variable: AWS_BEARER_TOKEN_BEDROCK (or BEDROCK_API_KEY)
@@ -15,13 +15,15 @@ from __future__ import annotations
 
 import os
 import json
+import re
+import ast
 import asyncio
 import threading
 from typing import Generator, Callable
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT
+from src.prompts.system_prompt_akari import SYSTEM_PROMPT_AKARI_ASSISTANT, get_system_prompt
 from src.tools import tool_registry
 from src.config import CHAT_TEMPERATURE, TOOL_TEMPERATURE, TOOL_EXECUTION_TIMEOUT
 
@@ -119,9 +121,93 @@ def get_client(api_key: str | None = None) -> OpenAI:
     )
 
 
-def _format_messages(prompt: str, history: list, image: str | None = None) -> list[dict]:
+def extract_gemma4_tool_calls(text: str) -> tuple[list[dict], str]:
+    """
+    Official Google Gemma 4 tool call extractor based on:
+    https://ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4
+    Parses <|tool_call|>call:name{args}<tool_call|>, <|tool_response|>, and casts arguments.
+    """
+    def cast(v: str):
+        v_stripped = v.strip()
+        try:
+            return int(v_stripped)
+        except ValueError:
+            try:
+                return float(v_stripped)
+            except ValueError:
+                return {"true": True, "false": False}.get(
+                    v_stripped.lower(), v_stripped.strip("'\"")
+                )
+
+    def parse_args(args_str: str) -> dict:
+        if not args_str or not args_str.strip():
+            return {}
+        cleaned = args_str.replace('<|">', '"').replace('<|"|>', '"')
+        wrapped = cleaned if cleaned.strip().startswith("{") else "{" + cleaned + "}"
+        try:
+            parsed = json.loads(wrapped)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+
+        # Google's official regex extraction with cast()
+        extracted = {}
+        for k, v1, v2 in re.findall(
+            r'(\w+):(?:<\|"\|>(.*?)<\|"\|>|([^,}]*))', args_str
+        ):
+            val = (v1 if v1 != "" else v2).strip()
+            extracted[k] = cast(val)
+        return extracted
+
+    tool_call_pattern = re.compile(
+        r"<\|tool_call\|?>call:(\w+)\{(.*?)\}<tool_call\|?>",
+        re.DOTALL
+    )
+
+    calls = []
+    for idx, (name, args) in enumerate(tool_call_pattern.findall(text)):
+        parsed_args = parse_args(args)
+        calls.append({
+            "id": f"tc_{idx}_{name}",
+            "name": name,
+            "arguments": json.dumps(parsed_args),
+            "parsed_arguments": parsed_args,
+        })
+
+    # Also handle standalone call:NAME{...} if emitted without tags
+    if not calls:
+        standalone_pattern = re.compile(r"\bcall:(\w+)\{(.*?)\}", re.DOTALL)
+        for idx, (name, args) in enumerate(standalone_pattern.findall(text)):
+            parsed_args = parse_args(args)
+            calls.append({
+                "id": f"tc_{idx}_{name}",
+                "name": name,
+                "arguments": json.dumps(parsed_args),
+                "parsed_arguments": parsed_args,
+            })
+        cleaned = standalone_pattern.sub("", text)
+    else:
+        cleaned = tool_call_pattern.sub("", text)
+
+    # Strip Gemma 4 tool_response control tokens and thinking blocks from user-visible speech
+    cleaned = re.sub(r"<\|?tool_response\|?>", "", cleaned)
+    cleaned = re.sub(r"=== Thoughts ===.*?=== Answer ===", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"<\|?thought\|?>.*?<\|?/?thought\|?>", "", cleaned, flags=re.DOTALL)
+    cleaned = cleaned.strip()
+
+    return calls, cleaned
+
+
+def _format_messages(
+    prompt: str,
+    history: list,
+    image: str | None = None,
+    tools_enabled: bool = False,
+) -> list[dict]:
     """Converts mixed history items into standard message format."""
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_AKARI_ASSISTANT}]
+    sys_prompt = get_system_prompt(tools_enabled=tools_enabled)
+    messages = [{"role": "system", "content": sys_prompt}]
 
     for item in history:
         if isinstance(item, dict):
@@ -179,13 +265,13 @@ def _format_bedrock_error(chosen_model: str, err: Exception) -> str:
         return (
             f"[Bedrock Notice: Model '{chosen_model}' returned 404 Not Found on Amazon Bedrock Mantle. "
             f"AWS has this model in preview/catalog, but its runtime chat endpoint is not activated yet in region '{reg}'. "
-            f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
+            f"Please switch to 'mistral.ministral-3-8b-instruct', 'qwen.qwen3-32b', or 'openai.gpt-oss-120b'.]"
         )
     if "401" in err_str or "access_denied" in err_str or "permission_denied" in err_str:
         return (
             f"[Bedrock Notice: Access to model '{chosen_model}' was denied by Amazon Bedrock for this account. "
             f"This model requires specialized entitlement or access agreement in region '{reg}'. "
-            f"Please switch to 'mistral.ministral-3-8b-instruct', 'openai.gpt-oss-120b', or 'google.gemma-3-4b-it'.]"
+            f"Please switch to 'mistral.ministral-3-8b-instruct', 'qwen.qwen3-32b', or 'openai.gpt-oss-120b'.]"
         )
     return f"[Bedrock Error: Model '{chosen_model}' failed: {err}]"
 
@@ -211,7 +297,9 @@ def classic_chat(
 
     try:
         resp = client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content or ""
+        raw_text = resp.choices[0].message.content or ""
+        _, clean_text = extract_gemma4_tool_calls(raw_text)
+        return clean_text
     except Exception as err:
         print(f"[Bedrock] Request error with model '{chosen_model}': {err}")
         return _format_bedrock_error(chosen_model, err)
@@ -241,17 +329,18 @@ def stream_chat(
         f"(region={get_region()}, tools_enabled={tools_enabled}, has_image={bool(image)})"
     )
 
+    # Legacy Google Gemma (e.g. Gemma 3) on Bedrock Mantle drops tokens when tools parameter is supplied with system prompts.
+    # Google Gemma 4 natively supports tool calling and multimodal agentic workflows!
+    is_legacy_gemma = "gemma" in chosen_model.lower() and "gemma-4" not in chosen_model.lower()
+    effective_tools = tools_enabled and not is_legacy_gemma
+
     client = get_client()
-    messages = _format_messages(prompt, history, image=image)
+    messages = _format_messages(prompt, history, image=image, tools_enabled=effective_tools)
 
     # Extra parameters for reasoning models (e.g. OpenAI GPT-OSS on Bedrock)
     stream_kwargs = {}
     if "gpt-oss" in chosen_model.lower():
         stream_kwargs["max_tokens"] = 1000
-
-    # Models like Google Gemma on Bedrock Mantle drop tokens when tools parameter is supplied with system prompts
-    is_gemma = "gemma" in chosen_model.lower()
-    effective_tools = tools_enabled and not is_gemma
 
     # Fast path: tools disabled or model unsupported for tools
     if not effective_tools:
@@ -359,6 +448,22 @@ def stream_chat(
             yield f"[Bedrock Error: Stream iteration failed: {err}]"
             return
 
+        # Check if Gemma 4 (or model) emitted native control tokens in content stream instead of delta.tool_calls
+        if not tool_calls_dict and round_content_chunks:
+            full_round_text = "".join(round_content_chunks)
+            extracted_calls, cleaned_text = extract_gemma4_tool_calls(full_round_text)
+            if extracted_calls:
+                print(
+                    f"[Bedrock Gemma 4] Extracted {len(extracted_calls)} native tool calls from content stream."
+                )
+                for c_idx, ec in enumerate(extracted_calls):
+                    tool_calls_dict[c_idx] = {
+                        "id": ec["id"],
+                        "name": ec["name"],
+                        "arguments": ec["arguments"],
+                    }
+                round_content_chunks = [cleaned_text] if cleaned_text else []
+
         # Case 1: No tool calls requested -> final answer
         if not tool_calls_dict:
             for c in round_content_chunks:
@@ -366,7 +471,24 @@ def stream_chat(
             return
 
         # Case 2: Tool calls requested
-        executed_tool_calls_payload = []
+        assistant_tool_calls = [
+            {
+                "id": tc["id"],
+                "type": "function",
+                "function": {
+                    "name": tc["name"],
+                    "arguments": tc["arguments"],
+                },
+            }
+            for tc in [tool_calls_dict[i] for i in sorted(tool_calls_dict.keys())]
+        ]
+        accumulated_text = "".join(round_content_chunks).strip()
+
+        # Google Gemma 4 official tool response tracking (ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4)
+        gemma4_tool_responses = []
+        executed_tool_messages = []
+
+        # Execute each requested tool and prepare responses
         for idx in sorted(tool_calls_dict.keys()):
             tc_data = tool_calls_dict[idx]
             t_id = tc_data["id"]
@@ -379,45 +501,52 @@ def stream_chat(
                 t_args = {}
 
             if on_tool_activity:
-                on_tool_activity(t_name, "start")
-
-            executed_tool_calls_payload.append({
-                "id": t_id,
-                "type": "function",
-                "function": {
-                    "name": t_name,
-                    "arguments": raw_args,
-                },
-            })
+                try:
+                    on_tool_activity(t_name, "start")
+                except Exception:
+                    pass
 
             print(f"[Bedrock Tool] Executing '{t_name}' (args: {t_args})")
             try:
-                coro = tool_registry.execute_tool(t_name, t_args)
-                result = asyncio.run(
-                    asyncio.wait_for(coro, timeout=TOOL_EXECUTION_TIMEOUT)
+                loop = asyncio.new_event_loop()
+                result = loop.run_until_complete(
+                    tool_registry.execute_tool(t_name, t_args, timeout=TOOL_EXECUTION_TIMEOUT)
                 )
+                loop.close()
             except Exception as e:
                 print(f"[Bedrock Tool] Execution failed for '{t_name}': {e}")
-                result = f"Error executing tool {t_name}: {e}"
+                result = {"status": "error", "error": f"Tool execution failed: {e}"}
 
             print(f"[Bedrock Tool] Executed '{t_name}' -> {result}")
 
             if on_tool_activity:
-                on_tool_activity(t_name, "end")
+                try:
+                    on_tool_activity(t_name, "end")
+                except Exception:
+                    pass
 
-            # Append assistant message with tool calls
-            messages.append({
-                "role": "assistant",
-                "content": "".join(round_content_chunks) or None,
-                "tool_calls": executed_tool_calls_payload,
+            gemma4_tool_responses.append({
+                "name": t_name,
+                "response": result,
             })
 
-            # Append tool response
-            messages.append({
+            executed_tool_messages.append({
                 "role": "tool",
                 "tool_call_id": t_id,
-                "content": str(result),
+                "name": t_name,
+                "content": json.dumps(result) if isinstance(result, (dict, list)) else str(result),
             })
+
+        assistant_msg = {
+            "role": "assistant",
+            "content": accumulated_text if accumulated_text else None,
+            "tool_calls": assistant_tool_calls,
+        }
+        if "gemma" in chosen_model.lower():
+            assistant_msg["tool_responses"] = gemma4_tool_responses
+
+        messages.append(assistant_msg)
+        messages.extend(executed_tool_messages)
 
     # If max rounds exceeded, do one final conversational turn without tools
     try:

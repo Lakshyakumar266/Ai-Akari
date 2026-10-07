@@ -161,6 +161,18 @@ AVAILABLE_PROVIDERS = [
                 "tool_calling_supported": True,
                 "vision_supported": False,
             },
+            {
+                "id": "google/gemma-4-31b-it:free",
+                "name": "Google Gemma 4 31B (Free)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
+            {
+                "id": "google/gemma-4-26b-a4b-it:free",
+                "name": "Google Gemma 4 26B A4B (Free)",
+                "tool_calling_supported": True,
+                "vision_supported": True,
+            },
         ],
     },
     {
@@ -196,27 +208,9 @@ AVAILABLE_PROVIDERS = [
                 "vision_supported": True,
             },
             {
-                "id": "google.gemma-3-4b-it",
-                "name": "Google Gemma 3 4B (Fast)",
-                "tool_calling_supported": False,
-                "vision_supported": False,
-            },
-            {
-                "id": "google.gemma-3-12b-it",
-                "name": "Google Gemma 3 12B",
-                "tool_calling_supported": False,
-                "vision_supported": False,
-            },
-            {
                 "id": "qwen.qwen3-32b",
-                "name": "Qwen 3 32B",
+                "name": "Qwen 3 32B (High Reasoning)",
                 "tool_calling_supported": True,
-                "vision_supported": False,
-            },
-            {
-                "id": "deepseek.v3.1",
-                "name": "DeepSeek V3.1",
-                "tool_calling_supported": False,
                 "vision_supported": False,
             },
             {
@@ -232,16 +226,16 @@ AVAILABLE_PROVIDERS = [
                 "vision_supported": False,
             },
             {
-                "id": "openai.gpt-6-luna",
-                "name": "OpenAI GPT-6 Luna (Frontier)",
-                "tool_calling_supported": True,
-                "vision_supported": True,
+                "id": "google.gemma-3-4b-it",
+                "name": "Google Gemma 3 4B (Fast)",
+                "tool_calling_supported": False,
+                "vision_supported": False,
             },
             {
-                "id": "openai.gpt-5.5",
-                "name": "OpenAI GPT-5.5 (Flagship)",
-                "tool_calling_supported": True,
-                "vision_supported": True,
+                "id": "google.gemma-3-12b-it",
+                "name": "Google Gemma 3 12B (Smart)",
+                "tool_calling_supported": False,
+                "vision_supported": False,
             },
             {
                 "id": "google.gemma-3-27b-it",
@@ -250,20 +244,26 @@ AVAILABLE_PROVIDERS = [
                 "vision_supported": False,
             },
             {
-                "id": "deepseek.v3.2",
-                "name": "DeepSeek V3.2",
-                "tool_calling_supported": False,
-                "vision_supported": False,
-            },
-            {
-                "id": "anthropic.claude-opus-5",
-                "name": "Claude Opus 5 (Catalog Preview)",
+                "id": "deepseek.v3.1",
+                "name": "DeepSeek V3.1",
                 "tool_calling_supported": True,
                 "vision_supported": False,
             },
             {
-                "id": "anthropic.claude-sonnet-5",
-                "name": "Claude Sonnet 5 (Catalog Preview)",
+                "id": "deepseek.v3.2",
+                "name": "DeepSeek V3.2",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "zai.glm-5",
+                "name": "Zhipu GLM 5 (Frontier)",
+                "tool_calling_supported": True,
+                "vision_supported": False,
+            },
+            {
+                "id": "moonshotai.kimi-k2.5",
+                "name": "Moonshot Kimi K2.5",
                 "tool_calling_supported": True,
                 "vision_supported": False,
             },
@@ -336,7 +336,12 @@ def is_tool_calling_supported(
 
     m_info = next((m for m in p_info["models"] if m["id"] == target_model), None)
     if not m_info:
-        return target_provider in ("mistral", "openrouter", "openai")
+        lower = (target_model or "").lower()
+        if "gemma-4" in lower:
+            return True
+        if "gemma-3" in lower or "gemma-2" in lower:
+            return False
+        return target_provider in ("mistral", "openrouter", "openai", "bedrock")
 
     return bool(m_info.get("tool_calling_supported", False))
 
@@ -363,6 +368,7 @@ def is_vision_supported(
             or "gpt-6" in lower
             or "gpt-5.5" in lower
             or "luna" in lower
+            or "gemma-4" in lower
         ):
             return True
 
@@ -378,6 +384,7 @@ def is_vision_supported(
             or "gpt-4" in (target_model or "").lower()
             or "vision" in (target_model or "").lower()
             or "vl" in (target_model or "").lower()
+            or "gemma-4" in (target_model or "").lower()
         )
 
     return bool(m_info.get("vision_supported", False))
@@ -408,7 +415,9 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
     # Infer provider from model_id if provider_id is empty or omitted
     if not provider_id and model_id:
         lower = model_id.lower()
-        if (
+        if "/" in lower or lower.startswith("openrouter"):
+            provider_id = "openrouter"
+        elif (
             "gpt-oss" in lower
             or "gpt-6" in lower
             or "gpt-5.5" in lower
@@ -416,6 +425,8 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
             or lower.startswith("openai.")
             or "ministral-3" in lower
             or "gemma-3" in lower
+            or "gemma-4" in lower
+            or lower.startswith("google.gemma")
             or "qwen3-32b" in lower
             or "claude-sonnet-5" in lower
             or "claude-opus-5" in lower
@@ -429,8 +440,6 @@ def set_active_provider(provider_id: str, model_id: str | None = None) -> dict:
             or "openai" in lower
         ):
             provider_id = "openai"
-        elif "/" in lower or lower.startswith("openrouter"):
-            provider_id = "openrouter"
         elif lower == "qwen7b" or lower.startswith("freeai"):
             provider_id = "freeai"
         elif "mistral" in lower or "pixtral" in lower:
