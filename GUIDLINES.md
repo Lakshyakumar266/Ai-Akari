@@ -1,21 +1,70 @@
-# These are the guidlines that must be follow while making any changes in the project.
+# Guidelines for Making Changes to the Project
 
-## General Guidlines
+These guidelines must be followed whenever making changes to the project.
 
-### 1. while writing .md and reffring to any file, never reffre complete path of that file, only reffre relative path to that file with "./" .
+## General Guidelines
 
-### 2. Everythime when u learn somthing new to your knowlegde in the project and that works then you have to dump that knowledge inside the spec folder and make a new .md file for it. with the proper title and date. and that should be well written and detailed.
+### 1. Use Relative File Paths in Markdown
+
+When writing `.md` files and referencing other files, never use absolute or complete file paths. Always use relative paths prefixed with `./` where appropriate.
+
+### 2. Document New Knowledge and Learnings
+
+Whenever you discover new information or learn something new while working on the project, and the approach has been successfully tested, document that knowledge in the `./spec/` folder.
+
+- Create a new `.md` file for each distinct topic or learning.
+- Give each file a clear, descriptive title.
+- Include the date of documentation.
+- Write the content clearly, thoroughly, and in a well-structured manner.
+- Ensure that the documented information is accurate, detailed, and up to date.
 
 ## Project Information
 
-### This is Akari Watanabe an ai vrm assistant. she is an energetic,Tsundere ,tsun-tsun, yandere girl. She is a gamer, anime fan, and tech enthusiast. and this project contains its working code.
+### 1. Project Overview
 
-### the /client contains the vrm which is running trough ThreeJs and react-three-fiber. it is runnin on web browser.
+**Akari Watanabe** is an AI-powered VRM assistant. She has an energetic, tsundere, tsun-tsun, and yandere personality. She is a gamer, anime fan, and technology enthusiast.
 
-### the /server is containes the backend code which is actually running Akari as an LLM agent. it is built in python.
+This project contains the source code and implementation of Akari and her associated features.
 
-### the /docs contains the project context and the plans which which we are currently working on. and  the /spec folder contains the knowledges and the learnings we gather while working on this project. these documents should be very clear , detailed and well written. and these documents should be up to date. 
+### 2. Client (`./client/`)
 
-## Technical Guidlines
-### 1. always write code in clean and understandable manner with proper file naming and folder structure. 
-### 2. before doing anything always check internet and check for best possible way ot do that task other than brute force way. we need optimized code.
+The `./client/` directory contains Akari's VRM-based 3D avatar, which runs in a web browser.
+
+The client uses **Three.js** and **React Three Fiber** to render and control the 3D avatar.
+
+### 3. Server (`./server/`)
+
+The `./server/` directory contains the backend code that powers Akari as an LLM-based agent.
+
+The backend is implemented in **Python** and handles the agent's core functionality.
+
+### 4. Documentation (`./docs/` and `./spec/`)
+
+- **`./docs/`** — Contains the project's context, documentation, and plans for the features and tasks currently being developed.
+- **`./spec/`** — Contains technical knowledge, findings, learnings, and successfully tested solutions gathered during project development.
+
+All documentation must be clear, detailed, well-written, properly structured, and kept up to date.
+
+## Technical Guidelines
+
+### 1. Write Clean and Maintainable Code
+
+Always write code that is clean, readable, and easy to understand.
+
+- Use meaningful and consistent file and directory names.
+- Maintain a logical and organized folder structure.
+- Follow established coding conventions and best practices.
+- Avoid unnecessary complexity and duplication.
+- Prioritize maintainability, readability, and modularity.
+
+### 2. Research Before Implementation
+
+Before implementing a solution, research the available approaches and identify the best practical option for the task.
+
+- Check reliable online resources, official documentation, and relevant technical references.
+- Prefer optimized, maintainable, and well-established solutions over brute-force approaches.
+- Consider performance, complexity, reliability, and compatibility with the existing codebase.
+- Avoid introducing unnecessary dependencies or architectural complexity.
+- Verify that the proposed approach is appropriate for the project's existing architecture and requirements.
+
+The goal is to implement solutions that are efficient, reliable, and maintainable rather than simply choosing the quickest approach.
