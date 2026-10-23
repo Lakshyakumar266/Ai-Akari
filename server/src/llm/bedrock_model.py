@@ -583,7 +583,7 @@ def classify_emotion(text: str, model: str = DEFAULT_MODEL) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "You are an emotion classifier for an anime companion. "
+                        "You are an emotion classifier for an anime Assistant. "
                         "Read the following text and reply with EXACTLY ONE word from: "
                         "Happy, Sad, Angry, Surprised, Relaxed, Neutral. "
                         "Do not output anything else."

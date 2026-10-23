@@ -30,7 +30,7 @@ Three distinct factors contributed to this failure mode:
 1. **Format Constraint Conflict in 8B-Class Models:**  
    The system prompt mandated:
    > *"Reply as spoken dialogue only after emotion tags."*  
-   > *"- DEFAULT TO CONVERSATIONAL DIALOGUE: You are an anime companion, not an automated search engine."*  
+   > *"- DEFAULT TO CONVERSATIONAL DIALOGUE: You are an anime Assistant, not an automated search engine."*  
    
    Smaller models (e.g. `ministral-8b-latest`, 8B parameters) prioritize these high-weight system prompt directives and conclude that *every output must be a spoken line beginning with an emotion tag (`[angry] ...`)*. The model outputted tsundere banter promising to check rather than emitting an empty content message with structured `tool_calls`.
 

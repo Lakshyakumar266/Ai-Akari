@@ -17,7 +17,7 @@
 
 ## 1. Context & Motivation
 
-As the companion's toolset grew to 12 distinct capabilities (including clock, time conversion, date calculations, system health, DuckDuckGo/Tavily web search, and webpage reading), two operational issues emerged during user testing:
+As the Assistant's toolset grew to 12 distinct capabilities (including clock, time conversion, date calculations, system health, DuckDuckGo/Tavily web search, and webpage reading), two operational issues emerged during user testing:
 
 1. **Failure to Inspect Available Tools**:
    When asked what tools she possessed or asked to perform an action she was unsure about, the LLM would occasionally decline or attempt to answer from internal weights without checking registered tools.

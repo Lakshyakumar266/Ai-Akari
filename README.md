@@ -54,7 +54,7 @@ uv run python -m src.main
 
 ## Features
 
-- **Multi-Character Companion Support**: Interactive 3D avatars including **Akari Watanabe** and **Espeon** with idle motion (blinking, breathing, camera tracking), playable `.vrma` animations, and blendable facial expressions.
+- **Multi-Character Assistant Support**: Interactive 3D avatars including **Akari Watanabe** and **Espeon** with idle motion (blinking, breathing, camera tracking), playable `.vrma` animations, and blendable facial expressions.
 - **Pluggable LLM Inference Providers**: Dynamic runtime switching between foundation model providers:
   - **AWS Bedrock Mantle**: Ministral 3 (8B/14B), Mistral Large 3, OpenAI GPT-OSS (120B/20B), Google Gemma 3 (1B–27B), and Qwen 3 (VL 8B–235B).
   - **OpenAI**: GPT-4o, GPT-4o Mini, GPT-4 Turbo.

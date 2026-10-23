@@ -20,13 +20,13 @@
 
 ## 1. Overview & Objective
 
-This specification details the architecture for **multi-character companion support**, dynamic 3D VRM model switching, visual character selection in the Overview screen, URL parameter synchronization, and Windows file-watcher stabilization.
+This specification details the architecture for **multi-character Assistant support**, dynamic 3D VRM model switching, visual character selection in the Overview screen, URL parameter synchronization, and Windows file-watcher stabilization.
 
 ### Key Goals
 1. **Dynamic Character Registry**: Extensible character schema (`CharacterDefinition`) supporting arbitrary VRM characters with unique metadata (name, subtitle, category tag, description, avatar icon, VRM path, and custom chat placeholders).
 2. **Model Switching in 3D Canvas**: Hot-swapping the 3D VRM humanoid avatar in React Three Fiber without requiring page reloads or unmounting the entire Canvas/OrbitControls.
 3. **Graceful Asset & Memory Cleanup**: Explicit Three.js geometry and material disposal when unloading an avatar to prevent memory leaks and WebGL context crashes.
-4. **Clean URL Synchronization**: `?screen=characters&character=akari&model=...` where `akari` is the default character, and `character=espeon` activates the second companion.
+4. **Clean URL Synchronization**: `?screen=characters&character=akari&model=...` where `akari` is the default character, and `character=espeon` activates the second Assistant.
 5. **Windows Watcher Stabilization**: Prevent Vite dev server `EBUSY: resource busy or locked` watch crashes caused by Node `fs.watch` inspecting 20MB+ `.vrm` binary assets in the client directory.
 
 ---
@@ -59,7 +59,7 @@ export const CHARACTERS: Record<string, CharacterDefinition> = {
     subtitle: "Tsundere · Lively",
     categoryTag: "CHARACTERS",
     tagNumber: "01",
-    role: "Anime Companion",
+    role: "Anime Assistant",
     description: "Third-year high school student and stylish, lively gyaru from 'More Than a Married Couple, But Not Lovers'. Vibrant, spirited, with a secret caring side.",
     vrmUrl: "/characters/default.vrm",
     avatarUrl: "/akari_avatar.jpg",
@@ -75,8 +75,8 @@ export const CHARACTERS: Record<string, CharacterDefinition> = {
     subtitle: "Psychic · Elegant",
     categoryTag: "CHARACTERS",
     tagNumber: "02",
-    role: "Psychic Companion",
-    description: "The Sun Pokémon. Calm, loyal, and perceptive, sensing air currents and thoughts with psychic awareness to protect and companion.",
+    role: "Psychic Assistant",
+    description: "The Sun Pokémon. Calm, loyal, and perceptive, sensing air currents and thoughts with psychic awareness to protect and Assistant.",
     vrmUrl: "/characters/Espeon.vrm",
     avatarUrl: "/espeon_avatar.jpg",
     voiceEngine: "fish",
@@ -153,7 +153,7 @@ The Overview screen (`./client/src/components/screens/OverviewScreen.tsx`) displ
    - Header tag updates from `01` to `02`.
    - Title transitions from `Akari Watanabe` to `Espeon`.
    - Subtitle shifts to `Psychic · Elegant`.
-   - Description and role badges render the selected companion's attributes.
+   - Description and role badges render the selected Assistant's attributes.
    - Primary button labels: `Start chat with Akari` or `Start chat with Espeon`.
 3. **URL State Synchronization**: `useNavigation.navigate("characters", targetCharacter)` pushes the new character into the browser history and URL query string (`?character=espeon`).
 
